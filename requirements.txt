@@ -1,0 +1,16 @@
+# Core
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pyyaml>=6.0
+requests>=2.31
+python-dotenv>=1.0
+
+# Web search (no API key needed)
+duckduckgo-search>=5.0
+
+# Memory engine (submodule — not pip installed)
+# Deps for memoryengine:
+tiktoken>=0.7     # optional but recommended for accurate token counting
+
+# Dev
+pytest>=8.0

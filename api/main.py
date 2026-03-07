@@ -1,0 +1,228 @@
+"""
+FastAPI Backend
+---------------
+- WebSocket /ws  — streams all bus events to dashboard in real time
+- GET /status    — agent status + system health
+- GET /memory/{agent_id} — current memory state
+- GET /graph     — concept graph snapshot
+- GET /archives/{agent_id} — memory archives list
+- POST /inject   — inject a message into the bus (from dashboard)
+- POST /stop/{agent_id} / /start/{agent_id}
+"""
+
+import asyncio
+import json
+import time
+from pathlib import Path
+from typing import Any
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
+
+from bus.broker import bus
+from api.graph import concept_graph
+
+
+app = FastAPI(title="Agent Collective", version="1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Static dashboard
+dashboard_dir = Path(__file__).parent.parent / "dashboard"
+if dashboard_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(dashboard_dir)), name="static")
+
+# Agent registry — populated by run.py
+_agents: dict[str, Any] = {}
+_start_time = time.time()
+
+
+def register_agents(agents: dict):
+    global _agents
+    _agents = agents
+
+
+# ── WebSocket ─────────────────────────────────────────────────────────────────
+
+class ConnectionManager:
+    def __init__(self):
+        self.connections: list[WebSocket] = []
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self.connections.append(ws)
+
+    def disconnect(self, ws: WebSocket):
+        self.connections = [c for c in self.connections if c != ws]
+
+    async def broadcast(self, data: str):
+        dead = []
+        for ws in self.connections:
+            try:
+                await ws.send_text(data)
+            except Exception:
+                dead.append(ws)
+        for d in dead:
+            self.connections.remove(d)
+
+
+manager = ConnectionManager()
+
+
+async def bus_to_ws_loop():
+    """Subscribe to bus and forward all events to WebSocket clients."""
+    q = bus.subscribe()
+    try:
+        while True:
+            event = await q.get()
+            # Also update concept graph
+            concept_graph.ingest(event)
+            payload = json.dumps({"type": "event", "data": _serialise(event)})
+            await manager.broadcast(payload)
+    finally:
+        bus.unsubscribe(q)
+
+
+@app.on_event("startup")
+async def startup():
+    asyncio.create_task(bus_to_ws_loop())
+
+
+@app.get("/")
+async def root():
+    index = dashboard_dir / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return {"status": "Agent Collective API running", "dashboard": "/index.html"}
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await manager.connect(ws)
+    # Send recent history on connect
+    history = bus.recent(n=100)
+    for event in history:
+        concept_graph.ingest(event)
+        await ws.send_text(json.dumps({"type": "event", "data": _serialise(event)}))
+    # Send initial graph
+    await ws.send_text(json.dumps({"type": "graph", "data": concept_graph.to_json()}))
+    try:
+        while True:
+            await ws.receive_text()  # keep alive
+    except WebSocketDisconnect:
+        manager.disconnect(ws)
+
+
+# ── REST endpoints ─────────────────────────────────────────────────────────────
+
+@app.get("/status")
+async def status():
+    agents_status = {}
+    for agent_id, agent in _agents.items():
+        agents_status[agent_id] = {
+            "id":         agent.id,
+            "model":      agent.model,
+            "color":      agent.color,
+            "running":    agent._running,
+            "loop_count": agent._loop_count,
+            "skills":     agent.skills.installed(),
+        }
+    return {
+        "uptime_seconds": time.time() - _start_time,
+        "agents":         agents_status,
+        "bus_events":     len(bus._history),
+        "concept_nodes":  len(concept_graph.nodes),
+        "ws_clients":     len(manager.connections),
+    }
+
+
+@app.get("/memory/{agent_id}")
+async def get_memory(agent_id: str):
+    agent = _agents.get(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+    if not agent.memory:
+        return {"core": "", "working": "", "status": "no_memory_engine"}
+    return {
+        "core":    agent.memory.read_core(),
+        "working": agent.memory.read_working(),
+        "status":  agent.memory.get_status(),
+        "counts":  agent.memory.entry_count(),
+    }
+
+
+@app.get("/graph")
+async def get_graph():
+    return concept_graph.to_json()
+
+
+@app.get("/graph/top")
+async def get_top_concepts(n: int = 20):
+    return concept_graph.top_concepts(n=n)
+
+
+@app.get("/archives/{agent_id}")
+async def get_archives(agent_id: str):
+    agent = _agents.get(agent_id)
+    if not agent or not agent.memory:
+        raise HTTPException(status_code=404)
+    return agent.memory.list_archives()
+
+
+@app.get("/events")
+async def get_recent_events(n: int = 50, agent_id: str = None):
+    return bus.recent(n=n, agent_id=agent_id)
+
+
+@app.post("/inject")
+async def inject_message(payload: dict):
+    """Inject a message from the dashboard operator into the bus."""
+    await bus.publish({
+        "agent_id": "operator",
+        "model":    "human",
+        "color":    "#EF4444",
+        "phase":    "system",
+        "thought":  payload.get("message", ""),
+        "concepts": payload.get("concepts", []),
+        "publish":  payload.get("message", ""),
+        "agreements": {},
+    })
+    return {"ok": True}
+
+
+@app.post("/stop/{agent_id}")
+async def stop_agent(agent_id: str):
+    agent = _agents.get(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404)
+    await agent.stop()
+    return {"ok": True, "agent_id": agent_id, "status": "stopped"}
+
+
+@app.post("/start/{agent_id}")
+async def start_agent(agent_id: str):
+    agent = _agents.get(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404)
+    asyncio.create_task(agent.run())
+    return {"ok": True, "agent_id": agent_id, "status": "started"}
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+def _serialise(obj):
+    """Make objects JSON-safe."""
+    if isinstance(obj, dict):
+        return {k: _serialise(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_serialise(i) for i in obj]
+    if isinstance(obj, set):
+        return list(obj)
+    return obj

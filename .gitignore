@@ -1,0 +1,18 @@
+# Environment
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Memory runtime files (working + archives)
+memory/*/working.md
+memory/*/archive/
+skills/registry/
+skills/agents/
+
+# OS
+.DS_Store
