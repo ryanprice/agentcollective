@@ -240,6 +240,15 @@ def _serialise(obj):
         return list(obj)
     return obj
 
+# Mobile view
+@app.get("/mobile")
+async def mobile_view():
+    mobile = dashboard_dir / "mobile.html"
+    if mobile.exists():
+        return FileResponse(str(mobile))
+    from fastapi import HTTPException
+    raise HTTPException(404, "Mobile view not found")
+
 # SPA catch-all — MUST be last so it doesn't shadow API routes
 _SPA_ROUTES = {"streams", "bus", "tools", "map", "memory", "gpu", "about"}
 

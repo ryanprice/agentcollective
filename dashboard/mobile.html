@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<title>AC · Mobile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+/* ── Reset & tokens ───────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+:root {
+  --bg:      #080810;
+  --bg2:     #0f0f1a;
+  --bg3:     #161624;
+  --border:  #1e1e30;
+  --text:    #e2e8f0;
+  --muted:   #4a5568;
+  --soft:    #94a3b8;
+  --accent:  #7c3aed;
+  --hdr:     56px;
+  --nav:     60px;
+  --safe-b:  env(safe-area-inset-bottom, 0px);
+  --c-qwen:     #7C3AED;
+  --c-glm:      #0EA5E9;
+  --c-llama:    #10B981;
+  --c-deepseek: #F59E0B;
+  --c-operator: #EF4444;
+}
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); }
+body { font-family: 'Inter', system-ui, sans-serif; font-size: 14px; }
+#root { height: 100%; display: flex; flex-direction: column; }
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.hdr {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: var(--hdr);
+  padding: env(safe-area-inset-top, 0) 16px 0;
+  background: rgba(8,8,16,0.92);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-end; padding-bottom: 10px;
+}
+.hdr-logo {
+  font-family: 'Space Mono', monospace; font-size: 13px; font-weight: 700;
+  letter-spacing: 2px; color: var(--accent); text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px;
+}
+.live-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: #4ade80;
+  box-shadow: 0 0 6px #4ade80;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(0.85)} }
+.hdr-stats {
+  font-family: 'Space Mono', monospace; font-size: 9px; color: var(--muted);
+  margin-left: 10px; letter-spacing: .5px; align-self: center; margin-top: 1px;
+}
+.hdr-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.icon-btn {
+  width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--bg3); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background .15s;
+}
+.icon-btn:active { background: var(--bg2); }
+.icon-btn svg { width: 18px; height: 18px; stroke: var(--soft); fill: none; stroke-width: 2; stroke-linecap: round; }
+
+/* ── Filter overlay ───────────────────────────────────────────────────────── */
+.filter-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,.6); backdrop-filter: blur(4px);
+  display: flex; flex-direction: column;
+  transition: opacity .2s;
+}
+.filter-overlay.hidden { opacity: 0; pointer-events: none; }
+.filter-panel {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: calc(var(--hdr) + env(safe-area-inset-top,0) + 8px) 20px 24px;
+  transform: translateY(0); transition: transform .25s cubic-bezier(.4,0,.2,1);
+}
+.filter-overlay.hidden .filter-panel { transform: translateY(-100%); }
+.filter-section { margin-bottom: 20px; }
+.filter-label {
+  font-family: 'Space Mono', monospace; font-size: 9px; color: var(--muted);
+  letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 10px;
+}
+.pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill {
+  padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all .15s; user-select: none;
+  border: 1.5px solid; letter-spacing: .5px;
+}
+.pill.off { opacity: .3; filter: grayscale(.8); }
+.phase-pill { font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 1px; }
+
+/* ── Main scroll area ─────────────────────────────────────────────────────── */
+.scroll-area {
+  position: fixed;
+  top: var(--hdr);
+  bottom: calc(var(--nav) + var(--safe-b));
+  left: 0; right: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 8px 0 8px;
+}
+.scroll-area::-webkit-scrollbar { display: none; }
+
+/* ── Bottom nav ───────────────────────────────────────────────────────────── */
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  height: calc(var(--nav) + var(--safe-b));
+  padding-bottom: var(--safe-b);
+  background: rgba(8,8,16,0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border);
+  display: flex; align-items: flex-start; padding-top: 6px;
+}
+.nav-tab {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  cursor: pointer; padding: 4px 0; transition: all .15s; color: var(--muted);
+  font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: .5px;
+  text-transform: uppercase; user-select: none;
+}
+.nav-tab.active { color: var(--accent); }
+.nav-tab svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; }
+.nav-tab.active svg { stroke: var(--accent); filter: drop-shadow(0 0 4px var(--accent)); }
+
+/* ── FAB inject ───────────────────────────────────────────────────────────── */
+.fab {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--nav) + var(--safe-b) + 16px);
+  z-index: 99;
+  width: 48px; height: 48px; border-radius: 16px;
+  background: var(--accent);
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 20px rgba(124,58,237,.5);
+  transition: transform .15s, box-shadow .15s;
+}
+.fab:active { transform: scale(.92); box-shadow: 0 2px 10px rgba(124,58,237,.4); }
+.fab svg { width: 22px; height: 22px; stroke: white; fill: none; stroke-width: 2; stroke-linecap: round; }
+
+/* ── New events pill ──────────────────────────────────────────────────────── */
+.new-pill {
+  position: fixed; bottom: calc(var(--nav) + var(--safe-b) + 72px);
+  left: 50%; transform: translateX(-50%);
+  z-index: 98;
+  background: var(--accent); color: white;
+  font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700;
+  padding: 8px 18px; border-radius: 24px;
+  cursor: pointer; border: none;
+  box-shadow: 0 4px 16px rgba(124,58,237,.6);
+  animation: slideUp .2s cubic-bezier(.4,0,.2,1);
+  white-space: nowrap;
+}
+@keyframes slideUp { from{transform:translateX(-50%) translateY(8px);opacity:0} to{transform:translateX(-50%) translateY(0);opacity:1} }
+
+/* ── Feed cards ───────────────────────────────────────────────────────────── */
+.card-wrap { padding: 5px 12px; }
+.card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+  overflow: hidden; position: relative;
+  animation: cardIn .25s cubic-bezier(.4,0,.2,1);
+}
+@keyframes cardIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+.card-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+.card-inner { padding: 11px 12px 11px 18px; }
+.card-meta { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
+.agent-pill {
+  font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700;
+  padding: 2px 8px; border-radius: 6px; letter-spacing: .5px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.phase-badge {
+  font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700;
+  padding: 2px 7px; border-radius: 5px; letter-spacing: 1px;
+}
+.pb-reason  { background:#1e1b4b; color:#a78bfa; }
+.pb-plan    { background:#052e16; color:#4ade80; }
+.pb-act     { background:#431407; color:#fb923c; }
+.pb-observe { background:#0c1a2e; color:#38bdf8; }
+.pb-memory  { background:#1a0533; color:#e879f9; }
+.pb-system  { background:#1c1917; color:#a8a29e; }
+.card-time { font-family:'Space Mono',monospace; font-size:9px; color:var(--muted); margin-left:auto; }
+.card-thought {
+  font-size: 13.5px; line-height: 1.65; color: var(--text); font-weight: 400;
+}
+.card-thought.collapsed {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card-expand {
+  font-family: 'Space Mono', monospace; font-size: 10px; color: var(--accent);
+  margin-top: 6px; cursor: pointer; display: inline-block; letter-spacing: .5px;
+}
+.card-action {
+  margin-top: 9px; display: flex; align-items: center; gap: 7px;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 10px;
+}
+.action-icon { font-size: 14px; flex-shrink: 0; }
+.action-text { font-size: 12px; color: var(--soft); line-height: 1.4; flex: 1; min-width: 0; }
+.action-type-badge {
+  font-family:'Space Mono',monospace; font-size:8px; font-weight:700;
+  padding:2px 6px; border-radius:4px; flex-shrink:0;
+}
+.card-publish {
+  margin-top: 9px; padding: 8px 10px; border-radius: 9px;
+  background: rgba(124,58,237,.1); border: 1px solid rgba(124,58,237,.25);
+  font-size: 12px; color: #c4b5fd; line-height: 1.5;
+  display: flex; gap: 7px; align-items: flex-start;
+}
+.card-belief {
+  margin-top: 9px; padding: 7px 10px; border-radius: 9px;
+  background: rgba(232,121,249,.07); border: 1px solid rgba(232,121,249,.2);
+  font-size: 11px; color: #e879f9; line-height: 1.5; font-style: italic;
+  display: flex; gap: 6px; align-items: flex-start;
+}
+.card-expanded-results { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.result-item { padding: 8px 10px; background: var(--bg3); border-radius: 8px; }
+.result-title { font-size: 12px; color: #38bdf8; font-weight: 600; margin-bottom: 3px; }
+.result-url { font-size: 10px; color: var(--muted); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.result-body { font-size: 11.5px; color: var(--soft); line-height: 1.5; }
+
+/* ── Bus cards ────────────────────────────────────────────────────────────── */
+.bus-card {
+  background: rgba(124,58,237,.06); border: 1px solid rgba(124,58,237,.2);
+  border-radius: 14px; padding: 14px 16px;
+  animation: cardIn .25s cubic-bezier(.4,0,.2,1);
+}
+.bus-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.bus-msg { font-size: 14px; line-height: 1.6; color: var(--text); }
+.bus-concepts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.concept-tag {
+  font-family:'Space Mono',monospace; font-size:9px;
+  padding:2px 7px; border-radius:5px;
+  background:var(--bg3); color:var(--muted); border:1px solid var(--border);
+}
+
+/* ── Tool cards ───────────────────────────────────────────────────────────── */
+.tool-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+  padding: 12px 14px; animation: cardIn .25s cubic-bezier(.4,0,.2,1);
+}
+.tool-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.tool-card-query { font-size: 13px; color: var(--soft); line-height: 1.5; }
+.tool-card-results { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
+
+/* ── Memory view ──────────────────────────────────────────────────────────── */
+.mem-agent-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+  overflow: hidden; animation: cardIn .25s ease;
+}
+.mem-agent-header {
+  display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+  cursor: pointer; user-select: none;
+}
+.mem-agent-name { font-family:'Space Mono',monospace; font-size: 12px; font-weight:700; letter-spacing:1px; }
+.mem-chevron { margin-left:auto; transition:transform .2s; }
+.mem-chevron.open { transform: rotate(180deg); }
+.mem-body { padding: 0 16px 16px; display:flex; flex-direction:column; gap:14px; }
+.mem-section-label {
+  font-family:'Space Mono',monospace; font-size:9px; color:var(--muted);
+  letter-spacing:1.5px; text-transform:uppercase; margin-bottom:6px;
+}
+.mem-text { font-size:12px; color:var(--soft); line-height:1.7; white-space:pre-wrap; word-break:break-word; }
+
+/* ── GPU view ─────────────────────────────────────────────────────────────── */
+.gpu-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+  padding: 18px 16px; animation: cardIn .25s ease;
+}
+.gpu-level { font-family:'Space Mono',monospace; font-size:22px; font-weight:700; letter-spacing:2px; margin-bottom:16px; }
+.gpu-metrics { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.gpu-metric { background:var(--bg3); border-radius:10px; padding:12px; }
+.gpu-metric-label { font-family:'Space Mono',monospace; font-size:9px; color:var(--muted); letter-spacing:1px; margin-bottom:6px; }
+.gpu-metric-value { font-family:'Space Mono',monospace; font-size:20px; font-weight:700; }
+.gpu-bar { height:6px; border-radius:3px; background:var(--border); margin-top:8px; overflow:hidden; }
+.gpu-bar-fill { height:100%; border-radius:3px; transition:width .5s ease; }
+
+/* ── Inject modal ─────────────────────────────────────────────────────────── */
+.inject-overlay {
+  position:fixed; inset:0; z-index:300;
+  background:rgba(0,0,0,.7); backdrop-filter:blur(4px);
+  display:flex; flex-direction:column; justify-content:flex-end;
+  transition:opacity .2s;
+}
+.inject-overlay.hidden { opacity:0; pointer-events:none; }
+.inject-sheet {
+  background:var(--bg2); border-top:1px solid var(--border);
+  border-radius:20px 20px 0 0; padding:24px 20px;
+  padding-bottom:calc(24px + var(--safe-b));
+  transform:translateY(0); transition:transform .25s cubic-bezier(.4,0,.2,1);
+}
+.inject-overlay.hidden .inject-sheet { transform:translateY(100%); }
+.inject-handle { width:36px; height:4px; background:var(--border); border-radius:2px; margin:0 auto 20px; }
+.inject-label { font-family:'Space Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:1.5px; margin-bottom:12px; }
+.inject-input {
+  width:100%; background:var(--bg3); border:1px solid var(--border);
+  border-radius:12px; padding:14px 16px; color:var(--text);
+  font-size:14px; font-family:'Inter',sans-serif; resize:none;
+  outline:none; transition:border .15s;
+}
+.inject-input:focus { border-color: var(--accent); }
+.inject-actions { display:flex; gap:10px; margin-top:12px; }
+.inject-send {
+  flex:1; background:var(--accent); color:white; border:none;
+  border-radius:12px; padding:14px; font-size:14px; font-weight:600;
+  cursor:pointer; font-family:'Inter',sans-serif; transition:opacity .15s;
+}
+.inject-send:active { opacity:.8; }
+.inject-cancel {
+  background:var(--bg3); border:1px solid var(--border); color:var(--soft);
+  border-radius:12px; padding:14px 20px; font-size:14px;
+  cursor:pointer; font-family:'Inter',sans-serif;
+}
+
+/* ── Empty/loading states ─────────────────────────────────────────────────── */
+.empty { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:10px; color:var(--muted); }
+.empty-icon { font-size:32px; }
+.empty-text { font-family:'Space Mono',monospace; font-size:11px; letter-spacing:1px; }
+.section-header { font-family:'Space Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:1.5px; text-transform:uppercase; padding:12px 16px 6px; }
+
+/* ── Divider ──────────────────────────────────────────────────────────────── */
+.ts-divider { display:flex; align-items:center; gap:10px; padding:4px 16px; }
+.ts-line { flex:1; height:1px; background:var(--border); }
+.ts-text { font-family:'Space Mono',monospace; font-size:9px; color:var(--muted); white-space:nowrap; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+const AGENTS = { qwen: '#7C3AED', glm: '#0EA5E9', llama: '#10B981', deepseek: '#F59E0B', operator: '#EF4444' };
+const PHASES = ['reason','plan','act','observe','memory','system'];
+const PHASE_LABEL = { reason:'REASON', plan:'PLAN', act:'ACT', observe:'OBSERVE', memory:'MEMORY', system:'SYS' };
+const PHASE_CLASS = { reason:'pb-reason', plan:'pb-plan', act:'pb-act', observe:'pb-observe', memory:'pb-memory', system:'pb-system' };
+const ACTION_ICONS = { search:'🔍', install_skill:'⚡', run_skill:'▶', run_script:'⚙', think:'💭' };
+const ACTION_COLORS = { search:'#0c1a2e', install_skill:'#1a0533', run_skill:'#1a0533', run_script:'#431407' };
+const ACTION_TEXT_COLORS = { search:'#38bdf8', install_skill:'#e879f9', run_skill:'#e879f9', run_script:'#fb923c' };
+
+function fmt(ts) { return new Date(ts*1000).toLocaleTimeString('en-CA',{hour12:false}); }
+function fmtShort(ts) {
+  const d = new Date(ts*1000);
+  return d.toLocaleTimeString('en-CA',{hour12:false,hour:'2-digit',minute:'2-digit'});
+}
+
+// ── WebSocket hook ─────────────────────────────────────────────────────────
+function useWS() {
+  const [events, setEvents] = useState([]);
+  const [connected, setConnected] = useState(false);
+  const [gpuStatus, setGpuStatus] = useState(null);
+  const wsRef = useRef(null);
+
+  const connect = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/ws`);
+    ws.onopen = () => setConnected(true);
+    ws.onclose = () => { setConnected(false); setTimeout(connect, 3000); };
+    ws.onerror = () => ws.close();
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'event') {
+        setEvents(prev => {
+          const next = [...prev, msg.data];
+          return next.length > 800 ? next.slice(-800) : next;
+        });
+      }
+    };
+    wsRef.current = ws;
+  }, []);
+
+  useEffect(() => { connect(); }, [connect]);
+
+  useEffect(() => {
+    let alive = true;
+    async function poll() {
+      try {
+        const r = await fetch('/gpu');
+        if (r.ok) { const d = await r.json(); if (alive) setGpuStatus(d); }
+      } catch {}
+      if (alive) setTimeout(poll, 10000);
+    }
+    poll();
+    return () => { alive = false; };
+  }, []);
+
+  const inject = useCallback(async (msg) => {
+    await fetch('/inject', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message:msg}) });
+  }, []);
+
+  return { events, connected, gpuStatus, inject, ws: wsRef.current };
+}
+
+// ── Filter state hook ──────────────────────────────────────────────────────
+function useFilters() {
+  const [agents, setAgents] = useState({ qwen:true, glm:true, llama:true, deepseek:true });
+  const [phases, setPhases] = useState({ reason:true, plan:true, act:true, observe:true, memory:true, system:true });
+  const [broadcastOnly, setBroadcastOnly] = useState(false);
+
+  const toggleAgent = a => setAgents(p => ({...p, [a]: !p[a]}));
+  const togglePhase = p => setPhases(prev => ({...prev, [p]: !prev[p]}));
+  const toggleAll = () => {
+    const allOn = Object.values(agents).every(Boolean);
+    setAgents(Object.fromEntries(Object.keys(agents).map(k => [k, !allOn])));
+  };
+
+  return { agents, phases, broadcastOnly, toggleAgent, togglePhase, toggleAll, setBroadcastOnly };
+}
+
+// ── Feed Card ──────────────────────────────────────────────────────────────
+function FeedCard({ event }) {
+  const [expanded, setExpanded] = useState(false);
+  const color = AGENTS[event.agent_id] || '#888';
+  const thought = event.thought || '';
+  const needsExpand = thought.length > 160;
+  const action = event.action;
+  const obs = event._obs; // paired observe event (if act)
+
+  return (
+    <div className="card-wrap">
+      <div className="card">
+        <div className="card-bar" style={{background: color}}/>
+        <div className="card-inner">
+
+          {/* Meta row */}
+          <div className="card-meta">
+            <span className="agent-pill" style={{color}}>
+              {event.agent_id}
+            </span>
+            <span className={`phase-badge ${PHASE_CLASS[event.phase] || 'pb-system'}`}>
+              {PHASE_LABEL[event.phase] || event.phase}
+            </span>
+            {event.loop != null && (
+              <span style={{fontFamily:'Space Mono',fontSize:9,color:'var(--muted)'}}>#{event.loop}</span>
+            )}
+            <span className="card-time">{fmt(event.ts)}</span>
+          </div>
+
+          {/* Thought */}
+          {thought && (
+            <>
+              <div className={`card-thought ${expanded || !needsExpand ? '' : 'collapsed'}`}>
+                {thought}
+              </div>
+              {needsExpand && (
+                <span className="card-expand" onClick={() => setExpanded(p => !p)}>
+                  {expanded ? '↑ less' : '↓ more'}
+                </span>
+              )}
+            </>
+          )}
+
+          {/* Action */}
+          {action && action.type && action.type !== 'think' && (
+            <div className="card-action" style={{background: ACTION_COLORS[action.type] || 'var(--bg3)'}}>
+              <span className="action-icon">{ACTION_ICONS[action.type] || '→'}</span>
+              <span className="action-text" style={{color: ACTION_TEXT_COLORS[action.type] || 'var(--soft)'}}>
+                {action.query || action.skill || action.code?.slice(0,120) || ''}
+              </span>
+              <span className="action-type-badge" style={{
+                background: ACTION_COLORS[action.type], color: ACTION_TEXT_COLORS[action.type],
+                border: `1px solid ${ACTION_TEXT_COLORS[action.type]}44`
+              }}>
+                {action.type.replace(/_/g,' ').toUpperCase()}
+              </span>
+            </div>
+          )}
+
+          {/* Search results (expanded only) */}
+          {expanded && obs?.result?.results?.length > 0 && (
+            <div className="card-expanded-results">
+              {obs.result.results.slice(0,3).map((r,i) => (
+                <div className="result-item" key={i}>
+                  <div className="result-title">{r.title}</div>
+                  <div className="result-url">{r.url}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Belief */}
+          {event.belief && (
+            <div className="card-belief">
+              <span>🔮</span>
+              <span>{event.belief}</span>
+            </div>
+          )}
+
+          {/* Publish */}
+          {event.publish && (
+            <div className="card-publish">
+              <span>📡</span>
+              <span>{event.publish}</span>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Bus Card ───────────────────────────────────────────────────────────────
+function BusCard({ event }) {
+  const color = AGENTS[event.agent_id] || '#888';
+  return (
+    <div className="card-wrap">
+      <div className="bus-card">
+        <div className="bus-card-header">
+          <div style={{width:8,height:8,borderRadius:'50%',background:color,boxShadow:`0 0 6px ${color}`}}/>
+          <span style={{fontFamily:'Space Mono',fontSize:11,fontWeight:700,color,letterSpacing:.5}}>
+            {event.agent_id?.toUpperCase()}
+          </span>
+          <span style={{fontFamily:'Space Mono',fontSize:9,color:'var(--muted)',marginLeft:'auto'}}>
+            {fmt(event.ts)}
+          </span>
+        </div>
+        <div className="bus-msg">{event.publish}</div>
+        {event.concepts?.length > 0 && (
+          <div className="bus-concepts">
+            {event.concepts.slice(0,6).map((c,i) => (
+              <span key={i} className="concept-tag">{c}</span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Tool Card ──────────────────────────────────────────────────────────────
+function ToolCard({ event }) {
+  const [expanded, setExpanded] = useState(false);
+  const color = AGENTS[event.agent_id] || '#888';
+  const action = event.action || {};
+  const t = action.type || '?';
+  const obs = event._obs;
+
+  return (
+    <div className="card-wrap">
+      <div className="tool-card" style={{borderLeft:`3px solid ${color}`}}>
+        <div className="tool-card-header">
+          <span style={{fontFamily:'Space Mono',fontSize:10,fontWeight:700,color}}>{event.agent_id}</span>
+          <span className={`action-type-badge`} style={{
+            fontSize:9, padding:'2px 7px', borderRadius:5, fontFamily:'Space Mono', fontWeight:700,
+            background: ACTION_COLORS[t] || 'var(--bg3)', color: ACTION_TEXT_COLORS[t] || 'var(--soft)',
+            border:`1px solid ${ACTION_TEXT_COLORS[t] || '#fff'}33`
+          }}>
+            {t.replace(/_/g,' ').toUpperCase()}
+          </span>
+          <span style={{fontFamily:'Space Mono',fontSize:9,color:'var(--muted)',marginLeft:'auto'}}>
+            {fmt(event.ts)}
+          </span>
+        </div>
+
+        <div className="tool-card-query">
+          {action.query || action.skill || ''}
+          {action.code && !expanded && (
+            <span style={{color:'var(--muted)'}}> {action.code.slice(0,80)}…</span>
+          )}
+          {action.code && expanded && (
+            <pre style={{marginTop:8,fontSize:11,color:'#fb923c',overflowX:'auto'}}>{action.code}</pre>
+          )}
+        </div>
+
+        {obs?.result?.results?.length > 0 && (
+          <>
+            <div onClick={() => setExpanded(p=>!p)} style={{
+              fontFamily:'Space Mono',fontSize:10,color:'var(--accent)',marginTop:8,cursor:'pointer'
+            }}>
+              {expanded ? '↑ hide results' : `↓ ${obs.result.results.length} results`}
+            </div>
+            {expanded && (
+              <div className="tool-card-results">
+                {obs.result.results.map((r,i) => (
+                  <div key={i} style={{padding:'7px 8px',background:'var(--bg3)',borderRadius:8}}>
+                    <div className="result-title">{r.title}</div>
+                    <div className="result-url">{r.url}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── GPU view ───────────────────────────────────────────────────────────────
+function GpuView({ gpuStatus }) {
+  if (!gpuStatus) return (
+    <div className="empty"><span className="empty-icon">📡</span><span className="empty-text">Fetching GPU data…</span></div>
+  );
+  const lvl = gpuStatus.level || 'NORMAL';
+  const lvlColor = { NORMAL:'#4ade80', WARM:'#fbbf24', HOT:'#f87171', CRITICAL:'#f43f5e' }[lvl] || '#888';
+  const temp = gpuStatus.temperature ?? 0;
+  const mem  = gpuStatus.memory_percent ?? 0;
+
+  return (
+    <div style={{padding:'12px 12px'}}>
+      <div className="gpu-card">
+        <div className="gpu-level" style={{color:lvlColor}}>{lvl}</div>
+        <div className="gpu-metrics">
+          {[
+            {label:'TEMP', value:`${temp.toFixed(0)}°`, pct: temp/100, color:'#fb923c'},
+            {label:'VRAM %', value:`${mem.toFixed(0)}%`, pct: mem/100, color:'#38bdf8'},
+          ].map(m => (
+            <div className="gpu-metric" key={m.label}>
+              <div className="gpu-metric-label">{m.label}</div>
+              <div className="gpu-metric-value" style={{color:m.color}}>{m.value}</div>
+              <div className="gpu-bar">
+                <div className="gpu-bar-fill" style={{width:`${Math.min(m.pct*100,100)}%`,background:m.color}}/>
+              </div>
+            </div>
+          ))}
+        </div>
+        {gpuStatus.message && (
+          <div style={{marginTop:14,fontFamily:'Space Mono',fontSize:11,color:'var(--muted)',lineHeight:1.6}}>
+            {gpuStatus.message}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Memory view ────────────────────────────────────────────────────────────
+function MemoryView() {
+  const [data, setData] = useState({});
+  const [open, setOpen] = useState({});
+
+  useEffect(() => {
+    const agents = ['qwen','glm','llama','deepseek'];
+    agents.forEach(async a => {
+      try {
+        const r = await fetch(`/memory/${a}`);
+        if (r.ok) { const d = await r.json(); setData(p => ({...p, [a]: d})); }
+      } catch {}
+    });
+  }, []);
+
+  return (
+    <div style={{padding:'8px 12px', display:'flex', flexDirection:'column', gap:10}}>
+      {Object.entries(AGENTS).filter(([a]) => a !== 'operator').map(([agent, color]) => {
+        const d = data[agent];
+        const isOpen = open[agent];
+        return (
+          <div className="mem-agent-card" key={agent}>
+            <div className="mem-agent-header" onClick={() => setOpen(p=>({...p,[agent]:!p[agent]}))}>
+              <div style={{width:8,height:8,borderRadius:'50%',background:color,boxShadow:`0 0 5px ${color}`}}/>
+              <span className="mem-agent-name" style={{color}}>{agent.toUpperCase()}</span>
+              {d && (
+                <span style={{fontFamily:'Space Mono',fontSize:9,color:'var(--muted)'}}>
+                  {d.episodic_count} episodic · {d.semantic_count} semantic
+                </span>
+              )}
+              <svg className={`mem-chevron ${isOpen?'open':''}`} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--muted)" strokeWidth="2">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
+            {isOpen && d && (
+              <div className="mem-body">
+                {d.core && (
+                  <div>
+                    <div className="mem-section-label">Core memory</div>
+                    <div className="mem-text">{d.core.slice(0,600)}{d.core.length>600?'…':''}</div>
+                  </div>
+                )}
+                {d.working && (
+                  <div>
+                    <div className="mem-section-label">Working memory</div>
+                    <div className="mem-text">{d.working.slice(0,600)}{d.working.length>600?'…':''}</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Filter panel ───────────────────────────────────────────────────────────
+function FilterPanel({ filters, show, onClose }) {
+  const { agents, phases, broadcastOnly, toggleAgent, togglePhase, setBroadcastOnly, toggleAll } = filters;
+
+  return (
+    <div className={`filter-overlay ${show?'':'hidden'}`} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="filter-panel">
+        {/* Agents */}
+        <div className="filter-section">
+          <div className="filter-label" style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <span>Agents</span>
+            <span onClick={toggleAll} style={{cursor:'pointer',color:'var(--accent)'}}>toggle all</span>
+          </div>
+          <div className="pill-row">
+            {Object.entries(AGENTS).filter(([a]) => a !== 'operator').map(([agent, color]) => (
+              <div key={agent} className={`pill ${agents[agent]?'':'off'}`}
+                onClick={() => toggleAgent(agent)}
+                style={{color, borderColor:`${color}60`, background:`${color}12`}}>
+                {agent}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Phases */}
+        <div className="filter-section">
+          <div className="filter-label">Phases</div>
+          <div className="pill-row">
+            {PHASES.map(p => (
+              <div key={p} className={`pill phase-pill ${phases[p]?'':'off'}`}
+                onClick={() => togglePhase(p)}
+                style={{color:'var(--soft)',borderColor:'var(--border)',background:'var(--bg3)'}}>
+                {PHASE_LABEL[p]}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Broadcast toggle */}
+        <div className="filter-section" style={{marginBottom:0}}>
+          <div className="filter-label">View mode</div>
+          <div className="pill-row">
+            {[['all','All events',false],['bcast','Broadcasts only',true]].map(([k,label,val]) => (
+              <div key={k} className={`pill ${broadcastOnly===val?'':'off'}`}
+                onClick={() => setBroadcastOnly(val)}
+                style={{color:'var(--soft)',borderColor:'var(--border)',background: broadcastOnly===val?'var(--bg3)':'transparent'}}>
+                {label}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Inject modal ───────────────────────────────────────────────────────────
+function InjectModal({ show, onClose, onSend }) {
+  const [msg, setMsg] = useState('');
+  const send = () => { if (!msg.trim()) return; onSend(msg.trim()); setMsg(''); onClose(); };
+  return (
+    <div className={`inject-overlay ${show?'':'hidden'}`} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="inject-sheet">
+        <div className="inject-handle"/>
+        <div className="inject-label">INJECT MESSAGE TO ALL AGENTS</div>
+        <textarea className="inject-input" rows={3} value={msg}
+          onChange={e => setMsg(e.target.value)}
+          onKeyDown={e => { if (e.key==='Enter' && e.metaKey) send(); }}
+          placeholder="What would you like the agents to consider?"/>
+        <div className="inject-actions">
+          <button className="inject-cancel" onClick={onClose}>Cancel</button>
+          <button className="inject-send" onClick={send}>Inject ↑</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main App ───────────────────────────────────────────────────────────────
+function App() {
+  const [tab, setTab]           = useState('feed');
+  const [showFilter, setShowFilter] = useState(false);
+  const [showInject, setShowInject] = useState(false);
+  const { events, connected, gpuStatus, inject } = useWS();
+  const filters = useFilters();
+  const scrollRef = useRef(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [newCount, setNewCount]   = useState(0);
+  const prevLenRef = useRef(0);
+  const isScrollingRef = useRef(false);
+
+  // Auto-scroll logic
+  useEffect(() => {
+    const el = scrollRef.current; if (!el) return;
+    if (autoScroll) { el.scrollTop = el.scrollHeight; setNewCount(0); }
+    else {
+      const diff = events.length - prevLenRef.current;
+      if (diff > 0) setNewCount(p => p + diff);
+    }
+    prevLenRef.current = events.length;
+  }, [events.length, autoScroll]);
+
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current; if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    if (atBottom) { setAutoScroll(true); setNewCount(0); }
+    else setAutoScroll(false);
+  }, []);
+
+  const jumpToBottom = () => {
+    const el = scrollRef.current; if (!el) return;
+    el.scrollTo({top: el.scrollHeight, behavior:'smooth'});
+    setAutoScroll(true); setNewCount(0);
+  };
+
+  // Pair observe events with their act events for result display
+  const pairedEvents = useMemo(() => {
+    const obsMap = {};
+    events.forEach(e => {
+      if (e.phase === 'observe' && e.loop != null) {
+        obsMap[`${e.agent_id}-${e.loop}`] = e;
+      }
+    });
+    return events.map(e => {
+      if (e.phase === 'act' && e.loop != null) {
+        const obs = obsMap[`${e.agent_id}-${e.loop}`];
+        if (obs) return {...e, _obs: obs};
+      }
+      return e;
+    });
+  }, [events]);
+
+  // Filtered feed
+  const feedEvents = useMemo(() => {
+    return pairedEvents.filter(e => {
+      if (!filters.agents[e.agent_id] && e.agent_id !== 'operator') return false;
+      if (!filters.phases[e.phase]) return false;
+      if (filters.broadcastOnly && !e.publish) return false;
+      return true;
+    });
+  }, [pairedEvents, filters.agents, filters.phases, filters.broadcastOnly]);
+
+  // Bus events
+  const busEvents = useMemo(() =>
+    pairedEvents.filter(e => e.publish && (filters.agents[e.agent_id] || e.agent_id === 'operator'))
+  , [pairedEvents, filters.agents]);
+
+  // Tool events
+  const toolEvents = useMemo(() =>
+    pairedEvents.filter(e =>
+      e.phase === 'act' && e.action?.type && e.action.type !== 'think' &&
+      (filters.agents[e.agent_id] || e.agent_id === 'operator')
+    )
+  , [pairedEvents, filters.agents]);
+
+  // Stats for header
+  const concepts = useMemo(() => {
+    const m = {};
+    events.forEach(e => (e.concepts||[]).forEach(c => m[c] = (m[c]||0)+1));
+    return Object.keys(m).length;
+  }, [events]);
+
+  const agentLoops = useMemo(() => {
+    const m = {};
+    events.forEach(e => { if (e.loop) m[e.agent_id] = Math.max(m[e.agent_id]||0, e.loop); });
+    return m;
+  }, [events]);
+
+  // GPU alert bar
+  const gpuAlert = gpuStatus && gpuStatus.level !== 'NORMAL';
+  const gpuColor = {WARM:'#fbbf24',HOT:'#f87171',CRITICAL:'#f43f5e'}[gpuStatus?.level] || '#fbbf24';
+
+  const renderTab = () => {
+    switch(tab) {
+      case 'feed': return (
+        <>
+          {feedEvents.length === 0 && (
+            <div className="empty" style={{height:300}}>
+              <span className="empty-icon">👁</span>
+              <span className="empty-text">Waiting for agents…</span>
+            </div>
+          )}
+          {feedEvents.map((e,i) => <FeedCard key={e.id||i} event={e}/>)}
+        </>
+      );
+      case 'bus': return (
+        <>
+          {busEvents.length === 0 ? (
+            <div className="empty" style={{height:300}}>
+              <span className="empty-icon">📡</span>
+              <span className="empty-text">No broadcasts yet</span>
+            </div>
+          ) : busEvents.map((e,i) => <BusCard key={e.id||i} event={e}/>)}
+        </>
+      );
+      case 'tools': return (
+        <>
+          {toolEvents.length === 0 ? (
+            <div className="empty" style={{height:300}}>
+              <span className="empty-icon">🔧</span>
+              <span className="empty-text">No tool use yet</span>
+            </div>
+          ) : toolEvents.map((e,i) => <ToolCard key={e.id||i} event={e}/>)}
+        </>
+      );
+      case 'memory': return <MemoryView/>;
+      case 'gpu': return <GpuView gpuStatus={gpuStatus}/>;
+    }
+  };
+
+  return (
+    <>
+      {/* Header */}
+      <div className="hdr">
+        <div className="hdr-logo">
+          <div className={`live-dot`} style={{background:connected?'#4ade80':'#f87171', boxShadow:`0 0 6px ${connected?'#4ade80':'#f87171'}`}}/>
+          AC
+        </div>
+        <div className="hdr-stats">{concepts} concepts · {events.length} events</div>
+        <div className="hdr-right">
+          {/* Agent status dots */}
+          <div style={{display:'flex',gap:6,alignItems:'center'}}>
+            {Object.entries(AGENTS).filter(([a])=>a!=='operator').map(([a,c]) => (
+              <div key={a} title={`${a} loop ${agentLoops[a]||0}`}
+                style={{width:7,height:7,borderRadius:'50%',background:filters.agents[a]?c:'#333',
+                  boxShadow:filters.agents[a]?`0 0 5px ${c}`:undefined,
+                  opacity:filters.agents[a]?1:.3, transition:'all .2s'}}/>
+            ))}
+          </div>
+          <div className="icon-btn" onClick={() => setShowFilter(true)}>
+            <svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+          </div>
+        </div>
+      </div>
+
+      {/* GPU alert strip */}
+      {gpuAlert && (
+        <div style={{
+          position:'fixed',top:'var(--hdr)',left:0,right:0,zIndex:90,
+          background:`${gpuColor}18`,borderBottom:`1px solid ${gpuColor}44`,
+          padding:'7px 16px',display:'flex',alignItems:'center',gap:8,
+          fontFamily:'Space Mono',fontSize:10,color:gpuColor,letterSpacing:1
+        }}>
+          ⚠ GPU {gpuStatus.level} · {gpuStatus.temperature?.toFixed(0)}°C · {gpuStatus.memory_percent?.toFixed(0)}% VRAM
+        </div>
+      )}
+
+      {/* Scroll area */}
+      <div className="scroll-area" ref={scrollRef} onScroll={onScroll}
+        style={{top:`calc(var(--hdr) + ${gpuAlert?'33px':'0px'})`}}>
+        {renderTab()}
+        {/* bottom padding */}
+        <div style={{height:16}}/>
+      </div>
+
+      {/* New events pill */}
+      {!autoScroll && newCount > 0 && (tab === 'feed' || tab === 'bus' || tab === 'tools') && (
+        <button className="new-pill" onClick={jumpToBottom}>
+          ↓ {newCount} new
+        </button>
+      )}
+
+      {/* FAB */}
+      <button className="fab" onClick={() => setShowInject(true)}>
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+
+      {/* Bottom nav */}
+      <div className="bottom-nav">
+        {[
+          { id:'feed', label:'Feed', svg:<><circle cx="12" cy="12" r="3"/><path d="M2 12h4M18 12h4M12 2v4M12 18v4"/></> },
+          { id:'bus',  label:'Bus',  svg:<><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 8.81a2 2 0 012-2.18h3"/><path d="M14 2l8 8-8 8"/></> },
+          { id:'tools',label:'Tools',svg:<><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h7v7h-7z" opacity=".4"/></> },
+          { id:'memory',label:'Mem', svg:<><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></> },
+          { id:'gpu',  label:'GPU',  svg:<><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h1M9 10h1M12 10h1M15 10h1"/><path d="M8 6V4M16 6V4M8 18v2M16 18v2"/></> },
+        ].map(({id,label,svg}) => (
+          <div key={id} className={`nav-tab ${tab===id?'active':''}`} onClick={() => setTab(id)}>
+            <svg viewBox="0 0 24 24">{svg}</svg>
+            {label}
+          </div>
+        ))}
+      </div>
+
+      {/* Filter panel */}
+      <FilterPanel filters={filters} show={showFilter} onClose={() => setShowFilter(false)}/>
+
+      {/* Inject modal */}
+      <InjectModal show={showInject} onClose={() => setShowInject(false)} onSend={inject}/>
+    </>
+  );
+}
+
+ReactDOM.render(<App/>, document.getElementById('root'));
+</script>
+</body>
+</html>
