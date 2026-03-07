@@ -4,7 +4,8 @@
 
 ollama:
   base_url: http://localhost:11434
-  timeout: 120
+  timeout: 300       # seconds per attempt — 32B models need breathing room under GPU load
+  retries: 3         # retry attempts before giving up on a loop iteration
 
 agents:
   - id: qwen

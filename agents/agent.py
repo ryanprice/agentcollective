@@ -111,31 +111,65 @@ class SimpleMemory:
 
 # ── Ollama call ────────────────────────────────────────────────────────────────
 
+class OllamaTimeout(Exception):
+    pass
+
+class OllamaError(Exception):
+    pass
+
+
 async def ollama_complete(
     model: str,
     system: str,
     messages: list[dict],
     base_url: str = "http://localhost:11434",
-    timeout: int = 120,
+    timeout: int = 300,
+    max_retries: int = 3,
 ) -> str:
+    """
+    Call Ollama chat endpoint with retry + exponential backoff.
+    Raises OllamaTimeout or OllamaError on unrecoverable failure
+    (never returns an error string — callers handle exceptions).
+    """
     payload = {
         "model":    model,
         "stream":   False,
         "messages": [{"role": "system", "content": system}] + messages,
     }
-    try:
-        resp = await asyncio.get_event_loop().run_in_executor(
-            _executor,
-            lambda: requests.post(
-                f"{base_url}/api/chat",
-                json=payload,
-                timeout=timeout,
-            ),
-        )
-        resp.raise_for_status()
-        return resp.json()["message"]["content"]
-    except Exception as e:
-        return json.dumps({"error": str(e), "thought": f"[Ollama error: {e}]"})
+
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            resp = await asyncio.get_event_loop().run_in_executor(
+                _executor,
+                lambda: requests.post(
+                    f"{base_url}/api/chat",
+                    json=payload,
+                    timeout=timeout,
+                ),
+            )
+            resp.raise_for_status()
+            return resp.json()["message"]["content"]
+
+        except requests.exceptions.Timeout as e:
+            last_exc = e
+            wait = 2 ** attempt   # 2s, 4s, 8s
+            log.warning(f"Ollama timeout (attempt {attempt}/{max_retries}), retrying in {wait}s…")
+            if attempt < max_retries:
+                await asyncio.sleep(wait)
+
+        except requests.exceptions.ConnectionError as e:
+            last_exc = e
+            wait = 2 ** attempt
+            log.warning(f"Ollama connection error (attempt {attempt}/{max_retries}), retrying in {wait}s…")
+            if attempt < max_retries:
+                await asyncio.sleep(wait)
+
+        except Exception as e:
+            # Non-retryable (bad JSON, HTTP 4xx, etc.)
+            raise OllamaError(str(e)) from e
+
+    raise OllamaTimeout(f"Ollama did not respond after {max_retries} attempts ({timeout}s each)")
 
 
 # ── Agent ─────────────────────────────────────────────────────────────────────
@@ -145,8 +179,10 @@ class Agent:
         self.id         = config["id"]
         self.model      = config["model"]
         self.color      = config.get("color", "#888888")
-        self.ollama_url = global_config.get("ollama", {}).get("base_url", "http://localhost:11434")
-        self.loop_config = global_config.get("loop", {})
+        self.ollama_url    = global_config.get("ollama", {}).get("base_url", "http://localhost:11434")
+        self.ollama_timeout = global_config.get("ollama", {}).get("timeout", 300)
+        self.ollama_retries = global_config.get("ollama", {}).get("retries", 3)
+        self.loop_config   = global_config.get("loop", {})
         self.seed_topic  = global_config.get("seed_topic", "Explore consciousness freely.")
 
         # Memory
@@ -229,16 +265,31 @@ class Agent:
 
         # REASON + PLAN (single LLM call returns structured JSON)
         await bus.publish(self._event("reason", "Reasoning..."))
-        raw = await ollama_complete(
-            model=self.model,
-            system=self._system_prompt(),
-            messages=self._conversation + [{"role": "user", "content": context}],
-            base_url=self.ollama_url,
-        )
+
+        try:
+            raw = await ollama_complete(
+                model=self.model,
+                system=self._system_prompt(),
+                messages=self._conversation + [{"role": "user", "content": context}],
+                base_url=self.ollama_url,
+                timeout=self.ollama_timeout,
+                max_retries=self.ollama_retries,
+            )
+        except OllamaTimeout as e:
+            # Publish a system event so the dashboard shows what happened
+            await bus.publish(self._event("system", f"⏱ Timed out waiting for {self.model} — skipping loop {self._loop_count}"))
+            log.warning(f"[{self.id}] {e}")
+            # Do NOT write to memory, do NOT append to conversation — just wait and retry next cycle
+            return
+        except OllamaError as e:
+            await bus.publish(self._event("system", f"⚠ Ollama error on loop {self._loop_count}: {e}"))
+            log.error(f"[{self.id}] Ollama error: {e}")
+            return
 
         parsed = self._parse_response(raw)
         thought = parsed.get("thought", raw[:500])
 
+        # Only publish / update conversation if we got a real response
         await bus.publish(self._event(
             "reason",
             thought,
