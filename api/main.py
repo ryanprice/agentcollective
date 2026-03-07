@@ -109,18 +109,6 @@ async def root():
     return {"status": "Agent Collective API running", "dashboard": "/index.html"}
 
 
-# SPA catch-all — serve index.html for all frontend routes
-_SPA_ROUTES = ["streams", "bus", "tools", "map", "memory", "gpu", "about"]
-
-@app.get("/{route}")
-async def spa_route(route: str):
-    if route in _SPA_ROUTES:
-        index = dashboard_dir / "index.html"
-        if index.exists():
-            return FileResponse(str(index))
-    from fastapi import HTTPException
-    raise HTTPException(status_code=404, detail="Not found")
-
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
@@ -251,3 +239,15 @@ def _serialise(obj):
     if isinstance(obj, set):
         return list(obj)
     return obj
+
+# SPA catch-all — MUST be last so it doesn't shadow API routes
+_SPA_ROUTES = {"streams", "bus", "tools", "map", "memory", "gpu", "about"}
+
+@app.get("/{route}")
+async def spa_route(route: str):
+    if route in _SPA_ROUTES:
+        index = dashboard_dir / "index.html"
+        if index.exists():
+            return FileResponse(str(index))
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail="Not found")
