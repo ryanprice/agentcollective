@@ -115,7 +115,7 @@ class GPUMonitor:
             result = subprocess.run(
                 [
                     "nvidia-smi",
-                    "--query-gpu=index,name,temperature.gpu,memory.used,memory.total",
+                    "--query-gpu=index,name,temperature.gpu,memory.used,memory.total,utilization.memory",
                     "--format=csv,noheader,nounits",
                 ],
                 capture_output=True, text=True, timeout=10,
@@ -137,7 +137,14 @@ class GPUMonitor:
 
                 mem_used  = safe_float(parts[3])
                 mem_total = safe_float(parts[4])
-                mem_pct   = (mem_used / mem_total * 100) if mem_total > 0 else 0
+                mem_util  = safe_float(parts[5]) if len(parts) > 5 else 0.0
+
+                # Grace Hopper / GB10: unified memory — try mem_util % if totals are N/A
+                if mem_total == 0:
+                    mem_used, mem_total, mem_pct = self._read_gh_memory(int(safe_float(parts[0])), mem_util)
+                else:
+                    mem_pct = (mem_used / mem_total * 100) if mem_total > 0 else 0
+
                 stats.append(GPUStats(
                     gpu_index    = int(safe_float(parts[0])),
                     name         = parts[1],
@@ -149,6 +156,47 @@ class GPUMonitor:
             return stats
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return []
+
+    def _read_gh_memory(self, gpu_index: int, util_pct: float):
+        """
+        Grace Hopper GB10 unified memory fallback.
+        Tries nvidia-smi dmon, then free -m for system RAM as proxy.
+        Returns (used_mb, total_mb, pct).
+        """
+        # Try nvidia-smi dmon for a single sample
+        try:
+            r = subprocess.run(
+                ["nvidia-smi", "dmon", "-s", "m", "-c", "1", "-i", str(gpu_index)],
+                capture_output=True, text=True, timeout=5,
+            )
+            for line in r.stdout.splitlines():
+                if line.startswith("#") or not line.strip():
+                    continue
+                cols = line.split()
+                if len(cols) >= 3:
+                    used  = float(cols[1])
+                    total = float(cols[2])
+                    if total > 0:
+                        return used, total, (used / total * 100)
+        except Exception:
+            pass
+
+        # Fallback: read system unified memory via /proc/meminfo
+        try:
+            mem = {}
+            with open("/proc/meminfo") as f:
+                for l in f:
+                    k, v = l.split(":")
+                    mem[k.strip()] = int(v.strip().split()[0]) / 1024  # KB→MB
+            total = mem.get("MemTotal", 0)
+            avail = mem.get("MemAvailable", 0)
+            used  = total - avail
+            pct   = (used / total * 100) if total > 0 else 0
+            return used, total, pct
+        except Exception:
+            pass
+
+        return 0, 0, util_pct  # last resort: use nvidia-smi util %
 
     # ── Level computation ─────────────────────────────────────────────────────
 
