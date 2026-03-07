@@ -920,14 +920,50 @@ function App() {
   const status = useStatus();
   const graph  = useGraph();
 
-  const [tab,    setTab]    = useState("streams");
-  const [mapTab, setMapTab] = useState("graph");
-  const [showAbout, setShowAbout] = useState(
-    () => !document.cookie.split(";").some(c => c.trim().startsWith("ac_seen="))
-  );
+  const TABS = ["streams", "bus", "tools", "map", "memory", "gpu"];
+
+  const getRouteState = () => {
+    const path = window.location.pathname.replace(/^\//, "") || "streams";
+    if (path === "about") return { tab: "streams", about: true };
+    return { tab: TABS.includes(path) ? path : "streams", about: false };
+  };
+
+  const [tab,      setTab]      = useState(() => getRouteState().tab);
+  const [mapTab,   setMapTab]   = useState("graph");
+  const [showAbout, setShowAbout] = useState(() => {
+    const { about } = getRouteState();
+    if (about) return true;
+    return !document.cookie.split(";").some(c => c.trim().startsWith("ac_seen="));
+  });
+
+  // Sync URL → state on back/forward
+  useEffect(() => {
+    const onPop = () => {
+      const { tab: t, about: a } = getRouteState();
+      setTab(t);
+      if (a) setShowAbout(true);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const navigate = (newTab) => {
+    setTab(newTab);
+    window.history.pushState({}, "", "/" + newTab);
+  };
+
   const closeAbout = () => {
     document.cookie = "ac_seen=1; max-age=" + (60 * 60 * 24 * 365) + "; path=/";
     setShowAbout(false);
+    // If we came from /about, push back to /streams
+    if (window.location.pathname === "/about") {
+      window.history.pushState({}, "", "/streams");
+    }
+  };
+
+  const openAbout = () => {
+    setShowAbout(true);
+    window.history.pushState({}, "", "/about");
   };
 
   const agents = ["qwen", "glm", "llama", "deepseek"];
@@ -959,13 +995,13 @@ function App() {
         <span className="uptime">
           {status?.concept_nodes || 0} concepts · {status?.bus_events || 0} events · uptime {uptime}
         </span>
-        <button className="modal-about-btn" onClick={() => setShowAbout(true)}>? ABOUT</button>
+        <button className="modal-about-btn" onClick={openAbout}>? ABOUT</button>
       </div>
 
       {/* Tabs */}
       <div className="tabs">
         {["streams", "bus", "tools", "map", "memory", "gpu"].map(t => (
-          <div key={t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
+          <div key={t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => navigate(t)}>
             {t === "streams" ? "🧠 Streams" : t === "bus" ? "📡 Bus" : t === "tools" ? "🔧 Tools" : t === "map" ? "🗺 Map" : t === "memory" ? "💾 Memory" : "🌡 GPU"}
           </div>
         ))}
