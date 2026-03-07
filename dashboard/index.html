@@ -317,35 +317,164 @@ function AgentPanel({ agentId, agentEvents, status }) {
 
 // ── Tool Log ──────────────────────────────────────────────────────────────────
 function ToolLog({ events }) {
+  const [selected, setSelected] = useState(null);
+
   const tools = events
     .filter(e => e.phase === "act" && e.action?.type && e.action.type !== "think")
     .slice(-200);
+
   const listRef = useRef(null);
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [tools.length]);
 
+  // Find the observe event that immediately follows a given act event (by agent + loop)
+  const getObservation = (e) => {
+    return events.find(ev =>
+      ev.agent_id === e.agent_id &&
+      ev.phase === "observe" &&
+      ev.loop === e.loop
+    );
+  };
+
+  // Find the reason event for same agent + loop
+  const getReason = (e) => {
+    return events.find(ev =>
+      ev.agent_id === e.agent_id &&
+      ev.phase === "reason" &&
+      ev.loop === e.loop
+    );
+  };
+
+  const typeClass = (t) => t === "install_skill" || t === "run_skill" ? "skill" : t === "run_script" ? "script" : "search";
+
   return (
-    <div className="tool-log">
-      <div className="tool-log-header">Tool Use Log — {tools.length} actions</div>
-      <div className="tool-list" ref={listRef}>
-        {tools.map((e, i) => {
-          const color = AGENT_COLORS[e.agent_id] || "#888";
-          const t = e.action?.type || "?";
-          return (
-            <div key={i} className="tool-entry">
-              <span className="tool-time">{fmt(e.ts)}</span>
-              <span className="tool-agent" style={{ color }}>{e.agent_id}</span>
-              <span className={`tool-type tool-${t === "install_skill" || t === "run_skill" ? "skill" : t === "run_script" ? "script" : "search"}`}>
-                {t.replace("_", " ").toUpperCase()}
-              </span>
-              <span className="tool-summary">
-                {(e.action?.query || e.action?.skill || e.thought || "").slice(0, 200)}
-              </span>
-            </div>
-          );
-        })}
+    <div className="tool-log" style={{ display:"flex", flexDirection:"row", flex:1, overflow:"hidden" }}>
+
+      {/* List */}
+      <div style={{ display:"flex", flexDirection:"column", flex: selected ? "0 0 420px" : 1, overflow:"hidden", borderRight: selected ? "1px solid var(--border)" : "none" }}>
+        <div className="tool-log-header">Tool Use Log — {tools.length} actions</div>
+        <div className="tool-list" ref={listRef}>
+          {tools.map((e, i) => {
+            const color = AGENT_COLORS[e.agent_id] || "#888";
+            const t = e.action?.type || "?";
+            const isSelected = selected === e;
+            return (
+              <div key={i} className="tool-entry" onClick={() => setSelected(isSelected ? null : e)}
+                   style={{ cursor:"pointer", background: isSelected ? `${color}12` : "", borderLeft: isSelected ? `2px solid ${color}` : "2px solid transparent" }}>
+                <span className="tool-time">{fmt(e.ts)}</span>
+                <span className="tool-agent" style={{ color }}>{e.agent_id}</span>
+                <span className={`tool-type tool-${typeClass(t)}`}>
+                  {t.replace(/_/g, " ").toUpperCase()}
+                </span>
+                <span className="tool-summary">
+                  {(e.action?.query || e.action?.skill || e.thought || "").slice(0, 200)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </div>
+
+      {/* Detail drawer */}
+      {selected && (() => {
+        const color  = AGENT_COLORS[selected.agent_id] || "#888";
+        const t      = selected.action?.type || "?";
+        const obs    = getObservation(selected);
+        const reason = getReason(selected);
+        const label  = typeClass(t);
+
+        return (
+          <div style={{ flex:1, overflow:"auto", display:"flex", flexDirection:"column", background:"var(--bg)" }}>
+            {/* Drawer header */}
+            <div style={{ padding:"12px 16px", borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
+              <div style={{ width:8, height:8, borderRadius:"50%", background:color }}/>
+              <span style={{ color, fontWeight:800, fontSize:11, letterSpacing:1 }}>{selected.agent_id.toUpperCase()}</span>
+              <span className={`tool-type tool-${label}`} style={{ fontSize:10 }}>{t.replace(/_/g, " ").toUpperCase()}</span>
+              <span style={{ color:"var(--muted)", fontSize:10, marginLeft:"auto" }}>{fmt(selected.ts)} · loop {selected.loop}</span>
+              <button onClick={() => setSelected(null)}
+                style={{ background:"none", border:"1px solid var(--border)", color:"var(--muted)", padding:"2px 8px", borderRadius:4, cursor:"pointer", fontFamily:"inherit", fontSize:10 }}>
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding:16, display:"flex", flexDirection:"column", gap:14, flex:1 }}>
+
+              {/* Thought / reasoning context */}
+              {reason?.thought && (
+                <div>
+                  <div style={{ fontSize:9, fontWeight:700, color:"var(--muted)", letterSpacing:1, textTransform:"uppercase", marginBottom:6 }}>Reasoning</div>
+                  <div style={{ background:"var(--bg2)", border:"1px solid var(--border)", borderRadius:6, padding:12, fontSize:11, color:"#94a3b8", lineHeight:1.7 }}>
+                    {reason.thought}
+                  </div>
+                </div>
+              )}
+
+              {/* Action detail */}
+              <div>
+                <div style={{ fontSize:9, fontWeight:700, color:"var(--muted)", letterSpacing:1, textTransform:"uppercase", marginBottom:6 }}>Action</div>
+                <div style={{ background:"var(--bg2)", border:`1px solid ${color}33`, borderRadius:6, padding:12 }}>
+                  {selected.action?.query && (
+                    <div style={{ fontSize:12, color:"#e2e8f0", fontWeight:600 }}>🔍 {selected.action.query}</div>
+                  )}
+                  {selected.action?.skill && (
+                    <div style={{ fontSize:12, color:"#e879f9", fontWeight:600 }}>⚡ {selected.action.skill}</div>
+                  )}
+                  {selected.action?.code && (
+                    <pre style={{ fontSize:10, color:"#fb923c", margin:0, whiteSpace:"pre-wrap", wordBreak:"break-word" }}>{selected.action.code}</pre>
+                  )}
+                </div>
+              </div>
+
+              {/* Observation / result */}
+              {obs && (
+                <div style={{ flex:1, display:"flex", flexDirection:"column", minHeight:0 }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:"var(--muted)", letterSpacing:1, textTransform:"uppercase", marginBottom:6 }}>
+                    Observation
+                    {obs.result?.raw?.results?.length > 0 && (
+                      <span style={{ color:"#38bdf8", marginLeft:8, fontWeight:400, fontSize:9 }}>
+                        {obs.result.raw.results.length} results
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ background:"var(--bg2)", border:"1px solid var(--border)", borderRadius:6, padding:12, overflow:"auto", flex:1 }}>
+                    {/* Search results list */}
+                    {obs.result?.raw?.results?.length > 0 ? (
+                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                        {obs.result.raw.results.map((r, ri) => (
+                          <div key={ri} style={{ borderBottom:"1px solid var(--border)", paddingBottom:8 }}>
+                            <a href={r.url || r.href} target="_blank" rel="noopener noreferrer"
+                               style={{ color:"#38bdf8", fontSize:11, fontWeight:600, textDecoration:"none", display:"block", marginBottom:3 }}>
+                              {r.title}
+                            </a>
+                            <div style={{ color:"#64748b", fontSize:9, marginBottom:4 }}>{r.url || r.href}</div>
+                            <div style={{ color:"#94a3b8", fontSize:11, lineHeight:1.6 }}>{r.body}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ color:"#94a3b8", fontSize:11, lineHeight:1.7, whiteSpace:"pre-wrap" }}>
+                        {obs.thought || obs.result?.summary || "No observation data"}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Belief promoted to memory */}
+              {selected.belief && (
+                <div>
+                  <div style={{ fontSize:9, fontWeight:700, color:"#e879f9", letterSpacing:1, textTransform:"uppercase", marginBottom:6 }}>Belief → SEMANTIC</div>
+                  <div style={{ background:"#1a0533", border:"1px solid #7e22ce44", borderRadius:6, padding:12, fontSize:11, color:"#e879f9", lineHeight:1.7 }}>
+                    {selected.belief}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
