@@ -4,6 +4,18 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Agent Collective</title>
+<script>
+/* Mobile auto-redirect — executes before any framework loads */
+(function () {
+  if (location.pathname === '/mobile') return;
+  var ua = navigator.userAgent || '';
+  var isPhone = /iPhone|Android.*Mobile|Mobile.*Android|BlackBerry|IEMobile|Opera Mini|webOS/i.test(ua);
+  var forceTablet = /[?&]tablet=1/.test(location.search);
+  if (isPhone || forceTablet) {
+    location.replace('/mobile' + location.search);
+  }
+}());
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
