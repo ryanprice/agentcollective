@@ -1,5 +1,9 @@
 # Agent Collective
 
+<img width="2238" height="1048" alt="image" src="https://github.com/user-attachments/assets/889fe83b-164c-46ae-90c6-deca0367295b" />
+
+<img width="2238" height="1048" alt="image" src="https://github.com/user-attachments/assets/9ca7c9e4-be27-4ee5-a57d-e11d4d7c5455" />
+
 Four autonomous AI agents running indefinitely on local Ollama models, exploring consciousness, quantum mechanics, simulation theory, and the nature of reality. Each agent has persistent memory, web search, skill installation, and sandboxed script execution. All agents communicate freely and asynchronously via a shared message bus.
 
 Monitored via a real-time web dashboard with concept graph, timeline heatmap, and divergence map.
