@@ -4,8 +4,18 @@
 
 ollama:
   base_url: http://localhost:11434
-  timeout: 300       # seconds per attempt — 32B models need breathing room under GPU load
-  retries: 3         # retry attempts before giving up on a loop iteration
+  timeout: 300           # default per-attempt timeout (seconds)
+  retries: 3             # max retry attempts before skipping a loop
+  retry_base_wait: 15    # base wait between retries (seconds) — grows with backoff
+  consecutive_fail_pause: 60   # extra sleep after N consecutive failures
+  consecutive_fail_threshold: 3
+
+# Per-model timeout overrides — heavier models get more time
+model_timeouts:
+  qwen2.5-coder:32b:     480   # 8 min — largest model
+  deepseek-coder-v2:16b: 360   # 6 min
+  glm-4.7-flash:latest:  240   # 4 min
+  llama3.1:8b:           180   # 3 min — fastest model
 
 agents:
   - id: qwen

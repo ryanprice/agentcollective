@@ -544,6 +544,34 @@ function FeedCard({ event }) {
   const [expanded, setExpanded] = useState(false);
   const color = AGENTS[event.agent_id] || '#888';
   const thought = event.thought || '';
+
+  // Timeout / error events get special treatment
+  const isTimeout  = event.phase === 'system' && thought.startsWith('⏱');
+  const isCooldown = event.phase === 'system' && thought.startsWith('😴');
+  const isError    = event.phase === 'system' && thought.startsWith('⚠');
+
+  if (isTimeout || isCooldown || isError) {
+    const bgColor  = isCooldown ? 'rgba(251,191,36,.07)' : 'rgba(239,68,68,.07)';
+    const bdColor  = isCooldown ? 'rgba(251,191,36,.25)' : 'rgba(239,68,68,.2)';
+    const txtColor = isCooldown ? '#fbbf24' : '#f87171';
+    return (
+      <div className="card-wrap">
+        <div style={{background:bgColor, border:`1px solid ${bdColor}`, borderRadius:12, padding:'10px 14px',
+          display:'flex', alignItems:'flex-start', gap:10,
+          animation:'cardIn .25s cubic-bezier(.4,0,.2,1)'}}>
+          <span style={{fontSize:16, flexShrink:0}}>{isCooldown ? '😴' : isTimeout ? '⏱' : '⚠'}</span>
+          <div style={{flex:1, minWidth:0}}>
+            <div style={{display:'flex', gap:8, alignItems:'center', marginBottom:4}}>
+              <span style={{fontFamily:'Space Mono',fontSize:10,fontWeight:700,color}}>{event.agent_id}</span>
+              <span style={{fontFamily:'Space Mono',fontSize:9,color:'var(--muted)',marginLeft:'auto'}}>{fmt(event.ts)}</span>
+            </div>
+            <div style={{fontSize:12, color:txtColor, lineHeight:1.5}}>{thought}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const needsExpand = thought.length > 160;
   const action = event.action;
   const obs = event._obs; // paired observe event (if act)
