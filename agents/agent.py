@@ -102,6 +102,8 @@ class Agent:
         while self._running:
             try:
                 await self._loop_iteration()
+            except asyncio.CancelledError:
+                break
             except Exception as e:
                 await bus.publish(self._event(
                     "system",
@@ -109,12 +111,14 @@ class Agent:
                     extra={"error": traceback.format_exc()},
                 ))
 
-            # Randomised delay to prevent lockstep
             delay = random.uniform(
                 self.loop_config.get("min_delay_seconds", 3),
                 self.loop_config.get("max_delay_seconds", 8),
             )
-            await asyncio.sleep(delay)
+            try:
+                await asyncio.sleep(delay)
+            except asyncio.CancelledError:
+                break
 
     async def stop(self):
         self._running = False

@@ -12,7 +12,6 @@ Usage:
 import argparse
 import asyncio
 import logging
-import signal
 import sys
 from pathlib import Path
 
@@ -74,11 +73,6 @@ async def main(config: dict, agent_filter: list[str] = None, run_api: bool = Tru
         for agent_id, agent in agents.items()
     ]
 
-    # Graceful shutdown
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: asyncio.create_task(_shutdown(agents, agent_tasks)))
-
     if run_api:
         api_config = config.get("api", {})
         host = api_config.get("host", "0.0.0.0")
@@ -93,9 +87,22 @@ async def main(config: dict, agent_filter: list[str] = None, run_api: bool = Tru
             log_level="warning",
         )
         server = uvicorn.Server(server_config)
-        await asyncio.gather(*agent_tasks, server.serve())
+        # Let uvicorn handle its own signal handling
+        server.install_signal_handlers = lambda: None
+
+        try:
+            await asyncio.gather(*agent_tasks, server.serve())
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            pass
+        finally:
+            await _shutdown(agents, agent_tasks)
     else:
-        await asyncio.gather(*agent_tasks)
+        try:
+            await asyncio.gather(*agent_tasks)
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            pass
+        finally:
+            await _shutdown(agents, agent_tasks)
 
 
 async def _shutdown(agents: dict, tasks: list):
@@ -103,7 +110,11 @@ async def _shutdown(agents: dict, tasks: list):
     for agent in agents.values():
         await agent.stop()
     for task in tasks:
-        task.cancel()
+        if not task.done():
+            task.cancel()
+    # Wait briefly for cancellations to propagate
+    await asyncio.gather(*tasks, return_exceptions=True)
+    log.info("All agents stopped.")
 
 
 if __name__ == "__main__":
