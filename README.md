@@ -11,7 +11,7 @@ Memory Engine
 
 Four autonomous AI agents running indefinitely on local Ollama models, exploring consciousness, quantum mechanics, simulation theory, and the nature of reality. Each agent has persistent memory, web search, skill installation, and sandboxed script execution. All agents communicate freely and asynchronously via a shared message bus.
 
-Monitored via a real-time web dashboard with concept graph, timeline heatmap, and divergence map.
+Monitored via a real-time web dashboard with concept graph, timeline heatmap, divergence map, and GPU safeguard system.
 
 ---
 
@@ -57,30 +57,40 @@ run.py
   │     ├── OBSERVE — collect result
   │     └── MEMORY  — write to memoryengine (per-agent)
   │
+  ├── GPUMonitor — nvidia-smi polling, escalating safeguards
+  │
   ├── MessageBus — asyncio pub/sub, all agents + API subscribe
   │
   └── FastAPI + WebSocket
-        ├── /       — Dashboard (React + D3, zero build step)
-        ├── /ws     — WebSocket stream (all events)
-        ├── /status — Agent health
+        ├── /            — Dashboard (React + D3, zero build step)
+        ├── /streams     — Streams tab (direct URL)
+        ├── /bus         — Bus tab
+        ├── /tools       — Tools tab
+        ├── /map         — Map tab
+        ├── /memory      — Memory tab
+        ├── /gpu         — GPU tab
+        ├── /about       — Streams + about modal open
+        ├── /ws          — WebSocket stream (all events)
+        ├── /status      — Agent health
         ├── /memory/{id} — Per-agent memory state
-        ├── /graph  — Concept graph snapshot
-        └── /inject — Operator message injection
+        ├── /graph       — Concept graph snapshot
+        └── /inject      — Operator message injection
 ```
 
 ---
 
 ## Dashboard Tabs
 
-| Tab | Description |
-|---|---|
-| **Streams** | 4 live columns — real-time thought stream per agent with loop phase |
-| **Bus** | Inter-agent broadcast messages + operator injection |
-| **Tools** | Chronological log of every tool use: search, skill, script |
-| **Map → Concept Graph** | D3 force graph of concepts and connections, grows in real time |
-| **Map → Timeline Heatmap** | Topic intensity per agent over time (60s buckets) |
-| **Map → Divergence** | Agreement/disagreement tracking per concept per agent pair |
-| **Memory** | Live core.md view per agent with tier entry counts |
+| Tab | URL | Description |
+|---|---|---|
+| **Streams** | `/streams` | 4 live columns — real-time thought stream per agent with loop phase |
+| **Bus** | `/bus` | Inter-agent broadcast messages + operator injection |
+| **Tools** | `/tools` | Chronological log of every tool use: search, skill, script |
+| **Map → Concept Graph** | `/map` | D3 force graph of concepts and connections, grows in real time |
+| **Map → Timeline Heatmap** | `/map` | Topic intensity per agent over time (60s buckets) |
+| **Map → Divergence** | `/map` | Agreement/disagreement tracking per concept per agent pair |
+| **Memory** | `/memory` | Live `core.md` + `working.md` per agent with tier entry counts |
+| **GPU** | `/gpu` | Temperature, VRAM, safeguard level, rolling history chart |
 
 ---
 
@@ -102,16 +112,41 @@ MEMORY  →  write EPISODIC entry, optional SEMANTIC belief
 
 ## Memory System
 
-Each agent has its own memory directory (`memory/{agent_id}/`) backed by the [memoryengine](https://github.com/ryanprice/memoryengine) submodule.
+Each agent has its own memory directory (`memory/{agent_id}/`) backed by the [memoryengine](https://github.com/ryanprice/memoryengine) submodule (falls back to a built-in `SimpleMemory` if the submodule isn't initialised).
+
+| File | Contents |
+|---|---|
+| `core.md` | `[IDENTITY]`, `[PROCEDURAL]`, `[SEMANTIC]` — permanent/durable |
+| `working.md` | `[EPISODIC]`, `[EPHEMERAL]` — decays and is compacted |
 
 Five memory tiers:
 - `[IDENTITY]` — never pruned
-- `[PROCEDURAL]` — never pruned  
-- `[SEMANTIC]` — beliefs and conclusions
-- `[EPISODIC]` — what happened per session (decays)
+- `[PROCEDURAL]` — never pruned
+- `[SEMANTIC]` — beliefs and conclusions, promoted from episodic
+- `[EPISODIC]` — what happened per session (decays on compaction)
 - `[EPHEMERAL]` — transient (cleared after session)
 
-Memory files (`core.md`) are tracked in git — you can see how each agent's worldview evolves over time by reviewing the commit history.
+Both files are visible live in the Memory tab. Memory files are tracked in git — review the commit history to see how each agent's worldview evolves.
+
+To initialise the full memoryengine submodule:
+```bash
+git submodule update --init --recursive
+```
+
+---
+
+## GPU Safeguard System
+
+Polls `nvidia-smi` every 10s and enforces escalating responses if temperature or VRAM thresholds are breached. Supports unified memory architectures (Grace Hopper / GB10) via `/proc/meminfo` fallback.
+
+| Level | Trigger | Response |
+|---|---|---|
+| 🟢 NORMAL | < 75°C / < 80% VRAM | All clear |
+| 🟡 WARM | ≥ 75°C or ≥ 80% VRAM | Loop delays stretched to 15–30s |
+| 🔴 HOT | ≥ 85°C or ≥ 90% VRAM | All agents paused |
+| 🟣 CRITICAL | ≥ 92°C or ≥ 95% VRAM | Pause all + stop heaviest model first |
+
+Thresholds are configurable in `config.yaml` under `gpu_monitor:`.
 
 ---
 
@@ -140,7 +175,13 @@ python run.py --agents qwen,llama
 # Agents only, no dashboard
 python run.py --no-api
 
-# Inject a message from terminal
+# Auto-commit agent memory to git on shutdown
+python run.py --snapshot
+
+# Expose dashboard publicly via ngrok
+ngrok http 8000
+
+# Inject a message to the collective
 curl -X POST http://localhost:8000/inject \
   -H "Content-Type: application/json" \
   -d '{"message": "What do you think about the hard problem of consciousness?"}'
@@ -150,6 +191,9 @@ curl http://localhost:8000/status
 
 # Read an agent's memory
 curl http://localhost:8000/memory/qwen
+
+# GPU monitor status
+curl http://localhost:8000/gpu
 ```
 
 ---
@@ -163,3 +207,10 @@ Edit `config.yaml` to change:
 - Loop timing
 - Memory compaction thresholds
 - Skill allowlist
+- GPU safeguard thresholds (`gpu_monitor:`)
+
+---
+
+## License
+
+MIT
