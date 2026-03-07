@@ -15,6 +15,7 @@ Each loop iteration:
 
 import asyncio
 import json
+import logging
 import random
 import re
 import time
@@ -28,6 +29,78 @@ from bus.broker import bus
 from tools.web_search import web_search, format_results
 from tools.sandbox import run_script
 from skills.manager import SkillManager
+
+log = logging.getLogger("agent")
+
+CORE_TEMPLATE = """\
+# Core Memory
+
+## [IDENTITY]
+
+## [PROCEDURAL]
+
+## [SEMANTIC]
+"""
+
+WORKING_TEMPLATE = """\
+# Working Memory
+
+## [EPISODIC]
+
+## [EPHEMERAL]
+"""
+
+
+class SimpleMemory:
+    """Minimal memory fallback when memoryengine submodule is unavailable."""
+    def __init__(self, memory_dir: Path):
+        self.memory_dir   = Path(memory_dir)
+        self.core_file    = self.memory_dir / "core.md"
+        self.working_file = self.memory_dir / "working.md"
+        self.memory_dir.mkdir(parents=True, exist_ok=True)
+        if not self.core_file.exists():
+            self.core_file.write_text(CORE_TEMPLATE)
+        if not self.working_file.exists():
+            self.working_file.write_text(WORKING_TEMPLATE)
+
+    def read_core(self) -> str:
+        return self.core_file.read_text(encoding="utf-8")
+
+    def read_working(self) -> str:
+        return self.working_file.read_text(encoding="utf-8")
+
+    def read_all(self) -> str:
+        return self.read_core() + "\n\n" + self.read_working()
+
+    def append_memory(self, content: str, tier: str = "EPISODIC"):
+        from datetime import datetime
+        ts    = datetime.now().strftime("%Y-%m-%d %H:%M")
+        entry = f"- [{ts}] {content.strip()}\n"
+        target = self.core_file if tier in ("IDENTITY","PROCEDURAL","SEMANTIC") else self.working_file
+        text   = target.read_text(encoding="utf-8")
+        header = f"## [{tier}]"
+        if header in text:
+            text = text.replace(header, header + "\n" + entry, 1)
+        else:
+            text += f"\n{header}\n{entry}"
+        target.write_text(text, encoding="utf-8")
+
+    def get_status(self) -> dict:
+        return {
+            "core_bytes":    self.core_file.stat().st_size,
+            "working_bytes": self.working_file.stat().st_size,
+        }
+
+    def entry_count(self) -> dict:
+        counts = {}
+        for tier in ["IDENTITY","PROCEDURAL","SEMANTIC","EPISODIC","EPHEMERAL"]:
+            source = self.read_core() if tier in ("IDENTITY","PROCEDURAL","SEMANTIC") else self.read_working()
+            counts[tier] = source.count(f"## [{tier}]")
+        return counts
+
+    def list_archives(self) -> list:
+        return []
+
 
 
 # ── Ollama call ────────────────────────────────────────────────────────────────
@@ -86,12 +159,22 @@ class Agent:
     def _setup_memory(self, memory_dir: Path):
         """Lazy import memoryengine — works as submodule or local copy."""
         import sys
-        sys.path.insert(0, str(Path(__file__).parent.parent / "memoryengine"))
+        # Try submodule path first, then local
+        for path in [
+            Path(__file__).parent.parent / "memoryengine",
+            Path(__file__).parent.parent,
+        ]:
+            if (path / "src" / "memory_engine.py").exists():
+                sys.path.insert(0, str(path))
+                break
+
         try:
             from src.memory_engine import MemoryEngine
             self.memory = MemoryEngine(memory_dir=str(memory_dir))
         except ImportError:
-            self.memory = None
+            # Fallback: simple file-based memory without the engine
+            log.warning(f"memoryengine not found for {self.id} — using simple file fallback")
+            self.memory = SimpleMemory(memory_dir)
 
     # ── Main loop ──────────────────────────────────────────────────────────────
 
