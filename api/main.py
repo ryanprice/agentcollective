@@ -41,12 +41,18 @@ if dashboard_dir.exists():
 
 # Agent registry — populated by run.py
 _agents: dict[str, Any] = {}
+_monitor = None
 _start_time = time.time()
 
 
 def register_agents(agents: dict):
     global _agents
     _agents = agents
+
+
+def register_monitor(monitor):
+    global _monitor
+    _monitor = monitor
 
 
 # ── WebSocket ─────────────────────────────────────────────────────────────────
@@ -176,7 +182,13 @@ async def get_archives(agent_id: str):
     return agent.memory.list_archives()
 
 
-@app.get("/events")
+@app.get("/gpu")
+async def get_gpu():
+    if not _monitor:
+        return {"status": "monitor_not_running"}
+    return _monitor.status()
+
+
 async def get_recent_events(n: int = 50, agent_id: str = None):
     return bus.recent(n=n, agent_id=agent_id)
 

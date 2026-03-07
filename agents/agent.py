@@ -100,6 +100,11 @@ class Agent:
         await bus.publish(self._event("system", f"Agent {self.id} ({self.model}) starting up"))
 
         while self._running:
+            # GPU safeguard pause
+            if getattr(self, "_paused", False):
+                await asyncio.sleep(5)
+                continue
+
             try:
                 await self._loop_iteration()
             except asyncio.CancelledError:

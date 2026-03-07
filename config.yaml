@@ -57,7 +57,16 @@ skills:
     - frontend-design
     - mcp-builder
 
-api:
+gpu_monitor:
+  poll_seconds:  10
+  temp_warn:     75    # °C → throttle
+  temp_hot:      85    # °C → pause all agents
+  temp_critical: 92    # °C → stop heaviest model
+  mem_warn:      80    # %  → throttle
+  mem_hot:       90    # %  → pause all agents
+  mem_critical:  95    # %  → stop heaviest model
+
+
   host: 0.0.0.0
   port: 8000
   cors_origins:

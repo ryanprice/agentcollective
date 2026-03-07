@@ -629,7 +629,113 @@ function MemoryViewer({ agentId, status }) {
   );
 }
 
-// ── App ────────────────────────────────────────────────────────────────────────
+// ── GPU Monitor Panel ─────────────────────────────────────────────────────────
+function GPUPanel() {
+  const [gpu, setGpu] = useState(null);
+  useEffect(() => {
+    const poll = async () => {
+      try { const r = await fetch("/gpu"); setGpu(await r.json()); } catch {}
+    };
+    poll();
+    const t = setInterval(poll, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  if (!gpu || gpu.status === "monitor_not_running") return (
+    <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", color:"var(--muted)" }}>
+      GPU monitor not running
+    </div>
+  );
+
+  const levelColors = { NORMAL:"#10B981", WARM:"#F59E0B", HOT:"#EF4444", CRITICAL:"#7C3AED" };
+  const levelColor  = levelColors[gpu.level] || "#888";
+
+  return (
+    <div style={{ flex:1, overflow:"auto", padding:16, display:"flex", flexDirection:"column", gap:16 }}>
+
+      {/* Safeguard level */}
+      <div style={{ background:"var(--bg2)", border:`1px solid ${levelColor}`, borderRadius:8, padding:"12px 16px", display:"flex", alignItems:"center", gap:12 }}>
+        <div style={{ width:12, height:12, borderRadius:"50%", background:levelColor, boxShadow:`0 0 8px ${levelColor}` }}/>
+        <span style={{ color:levelColor, fontWeight:700, fontSize:13, letterSpacing:1 }}>
+          SAFEGUARD: {gpu.level}
+        </span>
+        {gpu.paused?.length > 0 && <span style={{ color:"#F59E0B", fontSize:11 }}>⏸ Paused: {gpu.paused.join(", ")}</span>}
+        {gpu.stopped?.length > 0 && <span style={{ color:"#EF4444", fontSize:11 }}>■ Stopped: {gpu.stopped.join(", ")}</span>}
+      </div>
+
+      {/* Per-GPU stats */}
+      <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+        {gpu.gpus?.map((g, i) => {
+          const tempPct  = Math.min((g.temp_c / 100) * 100, 100);
+          const tempColor = g.temp_c >= 92 ? "#7C3AED" : g.temp_c >= 85 ? "#EF4444" : g.temp_c >= 75 ? "#F59E0B" : "#10B981";
+          const memColor  = g.mem_pct >= 95 ? "#7C3AED" : g.mem_pct >= 90 ? "#EF4444" : g.mem_pct >= 80 ? "#F59E0B" : "#10B981";
+          return (
+            <div key={i} style={{ background:"var(--bg2)", border:"1px solid var(--border)", borderRadius:8, padding:16, minWidth:280, flex:1 }}>
+              <div style={{ fontWeight:700, marginBottom:12, color:"var(--text)" }}>GPU {g.index} — {g.name}</div>
+
+              <div style={{ marginBottom:10 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                  <span style={{ color:"var(--muted)", fontSize:11 }}>Temperature</span>
+                  <span style={{ color:tempColor, fontWeight:700 }}>{g.temp_c}°C</span>
+                </div>
+                <div style={{ height:8, background:"var(--bg3)", borderRadius:4, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${tempPct}%`, background:tempColor, borderRadius:4, transition:"width .5s" }}/>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, color:"var(--muted)", marginTop:2 }}>
+                  <span>0°C</span><span style={{color:"#F59E0B"}}>75°</span><span style={{color:"#EF4444"}}>85°</span><span style={{color:"#7C3AED"}}>92°</span><span>100°C</span>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                  <span style={{ color:"var(--muted)", fontSize:11 }}>VRAM</span>
+                  <span style={{ color:memColor, fontWeight:700 }}>{g.mem_pct}% ({(g.mem_used_mb/1024).toFixed(1)} / {(g.mem_total_mb/1024).toFixed(1)} GB)</span>
+                </div>
+                <div style={{ height:8, background:"var(--bg3)", borderRadius:4, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${g.mem_pct}%`, background:memColor, borderRadius:4, transition:"width .5s" }}/>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, color:"var(--muted)", marginTop:2 }}>
+                  <span>0%</span><span style={{color:"#F59E0B"}}>80%</span><span style={{color:"#EF4444"}}>90%</span><span style={{color:"#7C3AED"}}>95%</span><span>100%</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* History sparkline */}
+      {gpu.history?.length > 1 && (
+        <div style={{ background:"var(--bg2)", border:"1px solid var(--border)", borderRadius:8, padding:16 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"var(--muted)", marginBottom:10, textTransform:"uppercase", letterSpacing:1 }}>
+            Temperature History
+          </div>
+          <svg width="100%" height="60" style={{ overflow:"visible" }}>
+            {(() => {
+              const pts  = gpu.history.slice(-120);
+              const maxT = Math.max(...pts.map(p => p.gpus?.[0]?.temp_c || 0), 100);
+              const W    = 800; const H = 60;
+              const x    = (i) => (i / (pts.length - 1)) * W;
+              const y    = (t) => H - (t / maxT) * H;
+              const path = pts.map((p, i) => `${i===0?"M":"L"}${x(i)},${y(p.gpus?.[0]?.temp_c||0)}`).join(" ");
+              return (
+                <>
+                  <path d={path} fill="none" stroke="#EF4444" strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>
+                  {[75,85,92].map(t => (
+                    <line key={t} x1="0" y1={y(t)} x2={W} y2={y(t)}
+                          stroke={t===92?"#7C3AED":t===85?"#EF4444":"#F59E0B"}
+                          strokeWidth="1" strokeDasharray="4,4" opacity="0.4"/>
+                  ))}
+                </>
+              );
+            })()}
+          </svg>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function App() {
   const wsUrl = `ws://${window.location.host}/ws`;
   const { events, connected } = useWebSocket(wsUrl);
@@ -671,9 +777,9 @@ function App() {
 
       {/* Tabs */}
       <div className="tabs">
-        {["streams", "bus", "tools", "map", "memory"].map(t => (
+        {["streams", "bus", "tools", "map", "memory", "gpu"].map(t => (
           <div key={t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
-            {t === "streams" ? "🧠 Streams" : t === "bus" ? "📡 Bus" : t === "tools" ? "🔧 Tools" : t === "map" ? "🗺 Map" : "💾 Memory"}
+            {t === "streams" ? "🧠 Streams" : t === "bus" ? "📡 Bus" : t === "tools" ? "🔧 Tools" : t === "map" ? "🗺 Map" : t === "memory" ? "💾 Memory" : "🌡 GPU"}
           </div>
         ))}
       </div>
@@ -712,6 +818,7 @@ function App() {
             {agents.map(id => <MemoryViewer key={id} agentId={id} status={status}/>)}
           </div>
         )}
+        {tab === "gpu" && <GPUPanel />}
       </div>
     </div>
   );
