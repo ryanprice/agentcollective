@@ -109,6 +109,11 @@ async def _shutdown(agents, tasks, monitor, monitor_task, snapshot=False):
         if not task.done():
             task.cancel()
     await asyncio.gather(*all_tasks, return_exceptions=True)
+
+    # Cleanly shut down the thread pool executor
+    from agents.agent import _executor
+    _executor.shutdown(wait=False, cancel_futures=True)
+
     log.info("All agents stopped.")
     if snapshot:
         _commit_memory_snapshot()

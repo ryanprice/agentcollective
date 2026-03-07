@@ -128,13 +128,20 @@ class GPUMonitor:
                 parts = [p.strip() for p in line.split(",")]
                 if len(parts) < 5:
                     continue
-                mem_used  = float(parts[3])
-                mem_total = float(parts[4])
+
+                def safe_float(val, default=0.0) -> float:
+                    try:
+                        return float(val)
+                    except (ValueError, TypeError):
+                        return default
+
+                mem_used  = safe_float(parts[3])
+                mem_total = safe_float(parts[4])
                 mem_pct   = (mem_used / mem_total * 100) if mem_total > 0 else 0
                 stats.append(GPUStats(
-                    gpu_index    = int(parts[0]),
+                    gpu_index    = int(safe_float(parts[0])),
                     name         = parts[1],
-                    temp_c       = float(parts[2]),
+                    temp_c       = safe_float(parts[2]),
                     mem_used_mb  = mem_used,
                     mem_total_mb = mem_total,
                     mem_pct      = mem_pct,

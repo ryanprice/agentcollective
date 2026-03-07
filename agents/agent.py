@@ -14,6 +14,7 @@ Each loop iteration:
 """
 
 import asyncio
+import concurrent.futures
 import json
 import logging
 import random
@@ -31,6 +32,9 @@ from tools.sandbox import run_script
 from skills.manager import SkillManager
 
 log = logging.getLogger("agent")
+
+# Shared executor — shut down cleanly on exit
+_executor = concurrent.futures.ThreadPoolExecutor(max_workers=8)
 
 CORE_TEMPLATE = """\
 # Core Memory
@@ -119,7 +123,7 @@ async def ollama_complete(
     }
     try:
         resp = await asyncio.get_event_loop().run_in_executor(
-            None,
+            _executor,
             lambda: requests.post(
                 f"{base_url}/api/chat",
                 json=payload,
