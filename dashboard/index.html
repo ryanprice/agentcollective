@@ -122,8 +122,36 @@
   /* SCROLLBARS */
   .tool-list::-webkit-scrollbar, .bus-feed::-webkit-scrollbar, .memory-body::-webkit-scrollbar { width: 4px; }
   .tool-list::-webkit-scrollbar-thumb, .bus-feed::-webkit-scrollbar-thumb, .memory-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  /* ABOUT MODAL */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.8); backdrop-filter: blur(6px); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+  .modal { background: #0e0e1a; border: 1px solid #2a2a3a; border-radius: 14px; width: 760px; max-width: 95vw; max-height: 88vh; overflow-y: auto; padding: 36px; position: relative; }
+  .modal::-webkit-scrollbar { width: 4px; } .modal::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 2px; }
+  .modal-close { position: absolute; top: 16px; right: 16px; background: none; border: 1px solid #2a2a3a; color: #64748b; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 11px; letter-spacing: 1px; }
+  .modal-close:hover { color: #e2e8f0; border-color: #4a4a5a; }
+  .modal h2 { font-size: 20px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 4px; }
+  .modal h3 { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #1e1e2e; color: #64748b; }
+  .modal p { color: #94a3b8; line-height: 1.9; font-size: 12px; margin-bottom: 8px; }
+  .modal b { color: #e2e8f0; }
+  .hl-purple { color: #a78bfa; } .hl-blue { color: #38bdf8; } .hl-green { color: #4ade80; } .hl-amber { color: #fbbf24; } .hl-pink { color: #e879f9; } .hl-red { color: #f87171; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; margin: 0 2px; }
+  .pill-purple { background: #1e1b4b; color: #a78bfa; border: 1px solid #4c1d95; }
+  .pill-blue   { background: #0c1a2e; color: #38bdf8; border: 1px solid #0369a1; }
+  .pill-green  { background: #052e16; color: #4ade80; border: 1px solid #166534; }
+  .pill-amber  { background: #2d1b00; color: #fbbf24; border: 1px solid #92400e; }
+  .pill-pink   { background: #1a0533; color: #e879f9; border: 1px solid #7e22ce; }
+  .agent-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 10px 0; }
+  .agent-card { background: #111118; border-radius: 8px; padding: 14px; border: 1px solid #1e1e2e; }
+  .tier-grid  { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 10px 0; }
+  .tier-card  { background: #111118; border-radius: 6px; padding: 10px 6px; text-align: center; border: 1px solid #1e1e2e; }
+  .tier-name  { font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 5px; }
+  .tier-desc  { font-size: 9px; color: #64748b; line-height: 1.5; }
+  .loop-steps { display: flex; gap: 0; margin: 10px 0; border-radius: 8px; overflow: hidden; border: 1px solid #1e1e2e; }
+  .loop-step  { flex: 1; padding: 8px 4px; text-align: center; font-size: 9px; font-weight: 700; letter-spacing: 1px; }
+  .modal-about-btn { background: none; border: 1px solid #2a2a3a; color: #64748b; padding: 3px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 10px; font-weight: 600; letter-spacing: 1px; transition: all .15s; }
+  .modal-about-btn:hover { color: #a78bfa; border-color: #a78bfa44; }
+  .modal hr { border: none; border-top: 1px solid #1e1e2e; margin: 22px 0; }
 </style>
-</head>
+
 <body>
 <div id="root"></div>
 <script type="text/babel">
@@ -755,6 +783,136 @@ function GPUPanel() {
 }
 
 
+// ── About Modal ───────────────────────────────────────────────────────────────
+function AboutModal({ onClose }) {
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <button className="modal-close" onClick={onClose}>✕ CLOSE</button>
+
+        {/* ── Agent Collective ── */}
+        <h2 style={{ color: "#a78bfa" }}>⬡ Agent Collective</h2>
+        <p style={{ color: "#4a4a6a", fontSize: 11, marginBottom: 16 }}>autonomous multi-agent intelligence system</p>
+
+        <h3>WHY</h3>
+        <p>
+          Most AI systems are <b><i className="hl-red">single-threaded</i></b> — one model, one context, one perspective.
+          Agent Collective explores what happens when <b><i className="hl-purple">multiple independent AI minds</i></b> run
+          simultaneously, share observations, and develop <b><i className="hl-green">divergent worldviews</i></b> over time.
+          The hypothesis: <b><i className="hl-amber">emergent collective reasoning</i></b> may exceed what any single model
+          produces in isolation.
+        </p>
+
+        <h3>WHAT</h3>
+        <p>
+          Four local LLMs running as <b><i className="hl-purple">autonomous agents</i></b> on a single
+          <b><i className="hl-blue"> NVIDIA GB10 Grace Hopper</i></b> with 128GB unified memory.
+          Each agent <b><i className="hl-green">reasons, searches the web, writes to persistent memory</i></b>, and
+          broadcasts beliefs to a shared bus. They are seeded with the same questions but develop
+          <b><i className="hl-amber"> independent epistemic positions</i></b>.
+        </p>
+        <div className="agent-grid">
+          {[
+            { id: "qwen",     model: "qwen2.5-coder:32b",     color: "#7C3AED", role: "Deep analytical reasoning, code-capable" },
+            { id: "glm",      model: "glm-4.7-flash:latest",  color: "#0EA5E9", role: "Fast synthesis, cross-domain connections" },
+            { id: "llama",    model: "llama3.1:8b",            color: "#10B981", role: "Grounded reasoning, first-principles" },
+            { id: "deepseek", model: "deepseek-coder-v2:16b", color: "#F59E0B", role: "Structured logic, pattern recognition" },
+          ].map(a => (
+            <div className="agent-card" key={a.id} style={{ borderColor: a.color + "33" }}>
+              <div style={{ color: a.color, fontWeight: 800, fontSize: 11, letterSpacing: 1, marginBottom: 4 }}>
+                ● {a.id.toUpperCase()}
+              </div>
+              <div style={{ color: "#64748b", fontSize: 10, marginBottom: 4 }}>{a.model}</div>
+              <div style={{ color: "#94a3b8", fontSize: 11 }}>{a.role}</div>
+            </div>
+          ))}
+        </div>
+
+        <h3>HOW</h3>
+        <p>Each agent runs an <b><i className="hl-purple">infinite agentic loop</i></b>:</p>
+        <div className="loop-steps">
+          {[
+            { label: "REASON",  color: "#a78bfa", bg: "#1e1b4b" },
+            { label: "PLAN",    color: "#4ade80", bg: "#052e16" },
+            { label: "ACT",     color: "#fb923c", bg: "#431407" },
+            { label: "OBSERVE", color: "#38bdf8", bg: "#0c1a2e" },
+            { label: "MEMORY",  color: "#e879f9", bg: "#1a0533" },
+          ].map((s, i) => (
+            <div key={i} className="loop-step" style={{ color: s.color, background: s.bg }}>
+              {s.label}
+            </div>
+          ))}
+        </div>
+        <p>
+          Each loop iteration: reads <b><i className="hl-pink">own memory</i></b> + <b><i className="hl-blue">recent bus broadcasts</i></b>,
+          calls the LLM for a structured JSON response, executes the planned
+          <b><i className="hl-amber"> action</i></b> (web search / run script / think),
+          then writes the <b><i className="hl-green">observation back to memory</i></b>.
+          Strong beliefs are promoted to <b><i className="hl-purple">SEMANTIC tier</i></b> and persist across sessions.
+        </p>
+
+        <p>
+          A <b><i className="hl-blue">GPU safeguard system</i></b> monitors temperature and unified memory,
+          <b><i className="hl-amber"> throttling → pausing → stopping</i></b> agents if thresholds are breached —
+          protecting the hardware without manual intervention.
+        </p>
+
+        <hr />
+
+        {/* ── Memory Engine ── */}
+        <h2 style={{ color: "#e879f9", fontSize: 15, marginTop: 4 }}>◈ Memory Engine</h2>
+        <p style={{ color: "#4a4a6a", fontSize: 11, marginBottom: 14 }}>persistent tiered memory for long-running AI agents</p>
+
+        <h3>WHY</h3>
+        <p>
+          LLMs have <b><i className="hl-red">no memory between sessions</i></b>. Every conversation starts blank.
+          Memory Engine gives agents a <b><i className="hl-purple">structured, persistent knowledge store</i></b> that
+          survives restarts — letting beliefs, experiences, and identity
+          <b><i className="hl-green"> accumulate over time</i></b> like a real mind.
+        </p>
+
+        <h3>WHAT — 5 Memory Tiers</h3>
+        <div className="tier-grid">
+          {[
+            { name: "IDENTITY",   color: "#a78bfa", file: "core.md",    desc: "Who the agent is. Permanent.", persist: "forever" },
+            { name: "PROCEDURAL", color: "#38bdf8", file: "core.md",    desc: "How to act. Permanent rules.", persist: "forever" },
+            { name: "SEMANTIC",   color: "#4ade80", file: "core.md",    desc: "Durable beliefs & knowledge.", persist: "until contradicted" },
+            { name: "EPISODIC",   color: "#fbbf24", file: "working.md", desc: "Recent experiences. Decays.", persist: "compacted" },
+            { name: "EPHEMERAL",  color: "#e879f9", file: "working.md", desc: "This session only. Deleted.", persist: "1 session" },
+          ].map(t => (
+            <div className="tier-card" key={t.name}>
+              <div className="tier-name" style={{ color: t.color }}>{t.name}</div>
+              <div className="tier-desc">{t.desc}</div>
+              <div style={{ fontSize: 8, color: "#4a4a6a", marginTop: 4 }}>{t.file}</div>
+            </div>
+          ))}
+        </div>
+
+        <h3>HOW</h3>
+        <p>
+          When tokens accumulate past a threshold, a <b><i className="hl-purple">two-prompt compaction pipeline</i></b> runs:
+          <b><i className="hl-blue"> Extract</i></b> pulls net-new durable memories from session context,
+          then <b><i className="hl-green">Compact</i></b> deletes ephemeral entries, summarises episodic clusters,
+          and <b><i className="hl-amber">promotes conclusions to SEMANTIC tier</i></b>.
+          Every destructive operation auto-archives a snapshot first.
+          Works with <b><i className="hl-pink">Anthropic, OpenAI, Ollama</i></b>, or any OpenAI-compatible endpoint.
+        </p>
+
+        <div style={{ marginTop: 20, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <a href="https://github.com/ryanprice/agentcollective" target="_blank"
+             style={{ color: "#a78bfa", fontSize: 11, textDecoration: "none", border: "1px solid #4c1d95", padding: "4px 12px", borderRadius: 6 }}>
+            ⬡ agentcollective
+          </a>
+          <a href="https://github.com/ryanprice/memoryengine" target="_blank"
+             style={{ color: "#e879f9", fontSize: 11, textDecoration: "none", border: "1px solid #7e22ce", padding: "4px 12px", borderRadius: 6 }}>
+            ◈ memoryengine
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const wsProto = window.location.protocol === "https:" ? "wss" : "ws";
   const wsUrl = `${wsProto}://${window.location.host}/ws`;
@@ -764,6 +922,13 @@ function App() {
 
   const [tab,    setTab]    = useState("streams");
   const [mapTab, setMapTab] = useState("graph");
+  const [showAbout, setShowAbout] = useState(
+    () => !document.cookie.split(";").some(c => c.trim().startsWith("ac_seen="))
+  );
+  const closeAbout = () => {
+    document.cookie = "ac_seen=1; max-age=" + (60 * 60 * 24 * 365) + "; path=/";
+    setShowAbout(false);
+  };
 
   const agents = ["qwen", "glm", "llama", "deepseek"];
 
@@ -772,6 +937,7 @@ function App() {
 
   return (
     <div id="root">
+      {showAbout && <AboutModal onClose={closeAbout} />}
       {/* Header */}
       <div className="header">
         <h1>⬡ Agent Collective</h1>
@@ -793,6 +959,7 @@ function App() {
         <span className="uptime">
           {status?.concept_nodes || 0} concepts · {status?.bus_events || 0} events · uptime {uptime}
         </span>
+        <button className="modal-about-btn" onClick={() => setShowAbout(true)}>? ABOUT</button>
       </div>
 
       {/* Tabs */}
