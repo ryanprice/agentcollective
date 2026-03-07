@@ -313,7 +313,92 @@ body { font-family: 'Inter', system-ui, sans-serif; font-size: 14px; }
 .gpu-bar { height:6px; border-radius:3px; background:var(--border); margin-top:8px; overflow:hidden; }
 .gpu-bar-fill { height:100%; border-radius:3px; transition:width .5s ease; }
 
-/* ── Inject modal ─────────────────────────────────────────────────────────── */
+/* ── About sheet ──────────────────────────────────────────────────────────── */
+.about-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(0,0,0,.7); backdrop-filter: blur(6px);
+  display: flex; flex-direction: column; justify-content: flex-end;
+  transition: opacity .25s;
+}
+.about-overlay.hidden { opacity: 0; pointer-events: none; }
+.about-sheet {
+  background: var(--bg2);
+  border-radius: 24px 24px 0 0;
+  border-top: 1px solid var(--border);
+  max-height: 92vh;
+  display: flex; flex-direction: column;
+  transform: translateY(0); transition: transform .3s cubic-bezier(.4,0,.2,1);
+  overflow: hidden;
+}
+.about-overlay.hidden .about-sheet { transform: translateY(100%); }
+.about-sheet-handle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px 0; flex-shrink: 0;
+}
+.about-sheet-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; }
+.about-close {
+  background: var(--bg3); border: 1px solid var(--border); color: var(--muted);
+  padding: 4px 12px; border-radius: 8px; cursor: pointer;
+  font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 1px;
+}
+.about-scroll {
+  overflow-y: auto; overflow-x: hidden;
+  padding: 20px 20px calc(20px + var(--safe-b));
+  -webkit-overflow-scrolling: touch;
+  flex: 1;
+}
+.about-scroll::-webkit-scrollbar { display: none; }
+.about-section { margin-bottom: 28px; }
+.about-h1 {
+  font-family: 'Space Mono', monospace; font-size: 17px; font-weight: 700;
+  letter-spacing: 1px; margin-bottom: 3px;
+}
+.about-sub { font-size: 11px; color: var(--muted); margin-bottom: 14px; letter-spacing: .5px; }
+.about-h2 {
+  font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700;
+  color: var(--muted); letter-spacing: 2px; text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.about-p { font-size: 13px; line-height: 1.7; color: var(--soft); margin-bottom: 12px; }
+.about-p b { color: var(--text); font-weight: 600; }
+.about-p i { font-style: normal; }
+.about-p .hl-purple { color: #a78bfa; }
+.about-p .hl-green  { color: #4ade80; }
+.about-p .hl-amber  { color: #fbbf24; }
+.about-p .hl-blue   { color: #38bdf8; }
+.about-p .hl-red    { color: #f87171; }
+.about-p .hl-pink   { color: #e879f9; }
+.about-divider { height: 1px; background: var(--border); margin: 24px 0; }
+
+.agent-grid-m { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.agent-card-m {
+  padding: 12px; border-radius: 12px; border: 1px solid;
+}
+.agent-card-m-name { font-family:'Space Mono',monospace; font-size:11px; font-weight:700; letter-spacing:.5px; margin-bottom:3px; }
+.agent-card-m-model { font-size:9px; color:var(--muted); margin-bottom:5px; }
+.agent-card-m-role  { font-size:11px; color:var(--soft); line-height:1.4; }
+
+.loop-steps-m { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.loop-step-m {
+  font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700;
+  padding: 5px 10px; border-radius: 6px; letter-spacing: 1px;
+}
+
+.tier-grid-m { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
+.tier-card-m {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--bg3); border-radius: 10px; padding: 10px 14px;
+}
+.tier-name-m { font-family:'Space Mono',monospace; font-size:10px; font-weight:700; letter-spacing:.5px; width:90px; flex-shrink:0; }
+.tier-desc-m { font-size:12px; color:var(--soft); flex:1; line-height:1.4; }
+.tier-persist-m { font-family:'Space Mono',monospace; font-size:8px; color:var(--muted); flex-shrink:0; text-align:right; }
+
+.about-links { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.about-link {
+  font-family: 'Space Mono', monospace; font-size: 11px; text-decoration: none;
+  padding: 8px 16px; border-radius: 10px; border: 1px solid; letter-spacing: .5px;
+  display: inline-block;
+}
 .inject-overlay {
   position:fixed; inset:0; z-index:300;
   background:rgba(0,0,0,.7); backdrop-filter:blur(4px);
@@ -829,11 +914,135 @@ function InjectModal({ show, onClose, onSend }) {
   );
 }
 
-// ── Main App ───────────────────────────────────────────────────────────────
+// ── About Sheet ────────────────────────────────────────────────────────────
+function AboutSheet({ show, onClose }) {
+  return (
+    <div className={`about-overlay ${show?'':'hidden'}`} onClick={e => { if(e.target===e.currentTarget) onClose(); }}>
+      <div className="about-sheet">
+        <div className="about-sheet-handle-row">
+          <div className="about-sheet-handle"/>
+          <button className="about-close" onClick={onClose}>✕ CLOSE</button>
+        </div>
+        <div className="about-scroll">
+
+          {/* ── Agent Collective ────────────────────────────────────────── */}
+          <div className="about-section">
+            <div className="about-h1" style={{color:'#a78bfa'}}>⬡ Agent Collective</div>
+            <div className="about-sub">autonomous multi-agent intelligence system</div>
+
+            <div className="about-h2">WHY</div>
+            <p className="about-p">
+              Most AI systems are <b><i className="hl-red">single-threaded</i></b> — one model, one context, one perspective.
+              Agent Collective explores what happens when <b><i className="hl-purple">multiple independent AI minds</i></b> run
+              simultaneously, share observations, and develop <b><i className="hl-green">divergent worldviews</i></b> over time.
+              The hypothesis: <b><i className="hl-amber">emergent collective reasoning</i></b> may exceed what any single model produces in isolation.
+            </p>
+
+            <div className="about-h2">WHAT</div>
+            <p className="about-p">
+              Four local LLMs running as <b><i className="hl-purple">autonomous agents</i></b> on a single
+              <b><i className="hl-blue"> NVIDIA GB10 Grace Hopper</i></b> with 128GB unified memory.
+              Each agent <b><i className="hl-green">reasons, searches the web, writes to persistent memory</i></b>, and
+              broadcasts beliefs to a shared bus.
+            </p>
+            <div className="agent-grid-m">
+              {[
+                {id:'qwen',     model:'qwen2.5-coder:32b',    color:'#7C3AED', role:'Deep analytical reasoning'},
+                {id:'glm',      model:'glm-4.7-flash:latest', color:'#0EA5E9', role:'Fast synthesis, connections'},
+                {id:'llama',    model:'llama3.1:8b',           color:'#10B981', role:'Grounded first-principles'},
+                {id:'deepseek', model:'deepseek-coder-v2:16b',color:'#F59E0B', role:'Structured logic, patterns'},
+              ].map(a => (
+                <div key={a.id} className="agent-card-m" style={{borderColor:`${a.color}33`, background:`${a.color}08`}}>
+                  <div className="agent-card-m-name" style={{color:a.color}}>● {a.id.toUpperCase()}</div>
+                  <div className="agent-card-m-model">{a.model}</div>
+                  <div className="agent-card-m-role">{a.role}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="about-h2">HOW</div>
+            <div className="loop-steps-m">
+              {[
+                {label:'REASON', color:'#a78bfa', bg:'#1e1b4b'},
+                {label:'PLAN',   color:'#4ade80', bg:'#052e16'},
+                {label:'ACT',    color:'#fb923c', bg:'#431407'},
+                {label:'OBSERVE',color:'#38bdf8', bg:'#0c1a2e'},
+                {label:'MEMORY', color:'#e879f9', bg:'#1a0533'},
+              ].map(s => (
+                <div key={s.label} className="loop-step-m" style={{color:s.color, background:s.bg}}>{s.label}</div>
+              ))}
+            </div>
+            <p className="about-p">
+              Each loop reads <b><i className="hl-pink">own memory</i></b> + <b><i className="hl-blue">recent bus broadcasts</i></b>,
+              calls the LLM for a structured JSON response, executes the planned
+              <b><i className="hl-amber"> action</i></b>, then writes the <b><i className="hl-green">observation back to memory</i></b>.
+              A <b><i className="hl-blue">GPU safeguard</i></b> monitors temperature and VRAM,
+              <b><i className="hl-amber"> throttling → pausing → stopping</i></b> agents if thresholds are breached.
+            </p>
+          </div>
+
+          <div className="about-divider"/>
+
+          {/* ── Memory Engine ────────────────────────────────────────────── */}
+          <div className="about-section">
+            <div className="about-h1" style={{color:'#e879f9'}}>◈ Memory Engine</div>
+            <div className="about-sub">persistent tiered memory for long-running AI agents</div>
+
+            <div className="about-h2">WHY</div>
+            <p className="about-p">
+              LLMs have <b><i className="hl-red">no memory between sessions</i></b>. Every conversation starts blank.
+              Memory Engine gives agents a <b><i className="hl-purple">structured, persistent knowledge store</i></b> that
+              survives restarts — letting beliefs, experiences, and identity
+              <b><i className="hl-green"> accumulate over time</i></b> like a real mind.
+            </p>
+
+            <div className="about-h2">5 MEMORY TIERS</div>
+            <div className="tier-grid-m">
+              {[
+                {name:'IDENTITY',   color:'#a78bfa', desc:'Who the agent is. Permanent.',       persist:'forever'},
+                {name:'PROCEDURAL', color:'#38bdf8', desc:'How to act. Permanent rules.',        persist:'forever'},
+                {name:'SEMANTIC',   color:'#4ade80', desc:'Durable beliefs & knowledge.',        persist:'until contradicted'},
+                {name:'EPISODIC',   color:'#fbbf24', desc:'Recent experiences. Decays.',         persist:'compacted'},
+                {name:'EPHEMERAL',  color:'#e879f9', desc:'This session only. Deleted on exit.', persist:'1 session'},
+              ].map(t => (
+                <div key={t.name} className="tier-card-m">
+                  <div className="tier-name-m" style={{color:t.color}}>{t.name}</div>
+                  <div className="tier-desc-m">{t.desc}</div>
+                  <div className="tier-persist-m">{t.persist}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="about-h2">HOW</div>
+            <p className="about-p">
+              When tokens accumulate past a threshold, a <b><i className="hl-purple">two-prompt compaction pipeline</i></b> runs:
+              <b><i className="hl-blue"> Extract</i></b> pulls net-new durable memories,
+              then <b><i className="hl-green">Compact</i></b> deletes ephemeral entries, summarises episodic clusters,
+              and <b><i className="hl-amber">promotes conclusions to SEMANTIC tier</i></b>.
+              Works with <b><i className="hl-pink">Anthropic, OpenAI, Ollama</i></b>, or any OpenAI-compatible endpoint.
+            </p>
+          </div>
+
+          {/* Links */}
+          <div className="about-links">
+            <a className="about-link" href="https://github.com/ryanprice/agentcollective" target="_blank"
+               style={{color:'#a78bfa', borderColor:'#4c1d95'}}>⬡ agentcollective</a>
+            <a className="about-link" href="https://github.com/ryanprice/memoryengine" target="_blank"
+               style={{color:'#e879f9', borderColor:'#7e22ce'}}>◈ memoryengine</a>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── About Sheet ────────────────────────────────────────────────────────────
 function App() {
   const [tab, setTab]           = useState('feed');
   const [showFilter, setShowFilter] = useState(false);
   const [showInject, setShowInject] = useState(false);
+  const [showAbout,  setShowAbout]  = useState(false);
   const { events, connected, gpuStatus, inject } = useWS();
   const filters = useFilters();
   const scrollRef = useRef(null);
@@ -983,6 +1192,11 @@ function App() {
           <div className="icon-btn" onClick={() => setShowFilter(true)}>
             <svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
           </div>
+          <div className="icon-btn" onClick={() => setShowAbout(true)}
+            style={{fontFamily:"'Space Mono',monospace", fontSize:11, fontWeight:700, color:'var(--muted)',
+              width:36, height:36, display:'flex', alignItems:'center', justifyContent:'center'}}>
+            ?
+          </div>
         </div>
       </div>
 
@@ -1039,6 +1253,9 @@ function App() {
 
       {/* Inject modal */}
       <InjectModal show={showInject} onClose={() => setShowInject(false)} onSend={inject}/>
+
+      {/* About sheet */}
+      <AboutSheet show={showAbout} onClose={() => setShowAbout(false)}/>
     </>
   );
 }
