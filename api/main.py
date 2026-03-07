@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -194,17 +194,29 @@ async def get_recent_events(n: int = 50, agent_id: str = None):
     return bus.recent(n=n, agent_id=agent_id)
 
 
+from api.guard import check_inject
+
 @app.post("/inject")
-async def inject_message(payload: dict):
+async def inject_message(payload: dict, request: Request):
     """Inject a message from the dashboard operator into the bus."""
+    raw_msg    = payload.get("message", "")
+    client_ip  = request.client.host if request.client else "unknown"
+
+    guard = check_inject(raw_msg, client_ip)
+    if not guard.ok:
+        raise HTTPException(
+            status_code=429 if guard.retry_after else 400,
+            detail={"error": guard.reason, "retry_after": guard.retry_after},
+        )
+
     await bus.publish({
-        "agent_id": "operator",
-        "model":    "human",
-        "color":    "#EF4444",
-        "phase":    "system",
-        "thought":  payload.get("message", ""),
-        "concepts": payload.get("concepts", []),
-        "publish":  payload.get("message", ""),
+        "agent_id":  "operator",
+        "model":     "human",
+        "color":     "#EF4444",
+        "phase":     "system",
+        "thought":   guard.sanitized,
+        "concepts":  payload.get("concepts", []),
+        "publish":   guard.sanitized,
         "agreements": {},
     })
     return {"ok": True}

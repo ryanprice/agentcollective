@@ -424,7 +424,15 @@ function useWS() {
   }, []);
 
   const inject = useCallback(async (msg) => {
-    await fetch('/inject', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message:msg}) });
+    const r = await fetch('/inject', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: msg}),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err?.detail?.error || `Error ${r.status}`);
+    }
   }, []);
 
   return { events, connected, gpuStatus, inject, ws: wsRef.current };
@@ -779,20 +787,42 @@ function FilterPanel({ filters, show, onClose }) {
 
 // ── Inject modal ───────────────────────────────────────────────────────────
 function InjectModal({ show, onClose, onSend }) {
-  const [msg, setMsg] = useState('');
-  const send = () => { if (!msg.trim()) return; onSend(msg.trim()); setMsg(''); onClose(); };
+  const [msg, setMsg]   = useState('');
+  const [err, setErr]   = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const send = async () => {
+    if (!msg.trim()) return;
+    setBusy(true); setErr('');
+    try {
+      await onSend(msg.trim());
+      setMsg(''); onClose();
+    } catch(e) {
+      setErr(e.message || 'Blocked');
+    } finally { setBusy(false); }
+  };
+
   return (
     <div className={`inject-overlay ${show?'':'hidden'}`} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="inject-sheet">
         <div className="inject-handle"/>
         <div className="inject-label">INJECT MESSAGE TO ALL AGENTS</div>
         <textarea className="inject-input" rows={3} value={msg}
-          onChange={e => setMsg(e.target.value)}
+          onChange={e => { setMsg(e.target.value); setErr(''); }}
           onKeyDown={e => { if (e.key==='Enter' && e.metaKey) send(); }}
           placeholder="What would you like the agents to consider?"/>
+        {err && (
+          <div style={{marginTop:8,padding:'8px 12px',background:'rgba(239,68,68,.1)',
+            border:'1px solid rgba(239,68,68,.3)',borderRadius:8,
+            fontFamily:'Space Mono',fontSize:10,color:'#f87171',lineHeight:1.5}}>
+            ⚠ {err}
+          </div>
+        )}
         <div className="inject-actions">
           <button className="inject-cancel" onClick={onClose}>Cancel</button>
-          <button className="inject-send" onClick={send}>Inject ↑</button>
+          <button className="inject-send" onClick={send} disabled={busy} style={{opacity:busy?.6:1}}>
+            {busy ? '…' : 'Inject ↑'}
+          </button>
         </div>
       </div>
     </div>
