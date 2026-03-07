@@ -612,8 +612,9 @@ function MemoryViewer({ agentId, status }) {
   const renderMemory = (text) => {
     if (!text) return null;
     return text.split("\n").map((line, i) => {
+      if (line.startsWith("# "))   return <div key={i} style={{ color:"#6366f1", fontWeight:700, marginBottom:4 }}>{line}</div>;
       if (line.startsWith("## [")) return <div key={i} className="memory-tier">{line}</div>;
-      if (line.startsWith("- ")) return <div key={i} className="memory-entry">{line}</div>;
+      if (line.startsWith("- "))   return <div key={i} className="memory-entry">{line}</div>;
       return <div key={i} style={{ color: "var(--muted)" }}>{line}</div>;
     });
   };
@@ -625,7 +626,15 @@ function MemoryViewer({ agentId, status }) {
         <span className="agent-name" style={{ color }}>{agentId}</span>
         <span className="agent-model">{model}</span>
       </div>
-      <div className="memory-body">{renderMemory(memory.core)}</div>
+      <div className="memory-body">
+        {renderMemory(memory.core)}
+        {memory.working && (
+          <>
+            <div style={{ borderTop:"1px solid var(--border)", margin:"8px 0", opacity:0.3 }}/>
+            {renderMemory(memory.working)}
+          </>
+        )}
+      </div>
       {memory.counts && (
         <div className="tier-stats">
           {Object.entries(memory.counts).map(([tier, count]) => (

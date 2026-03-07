@@ -78,13 +78,15 @@ class SimpleMemory:
 
     def append_memory(self, content: str, tier: str = "EPISODIC"):
         from datetime import datetime
-        ts    = datetime.now().strftime("%Y-%m-%d %H:%M")
-        entry = f"- [{ts}] {content.strip()}\n"
-        target = self.core_file if tier in ("IDENTITY","PROCEDURAL","SEMANTIC") else self.working_file
+        ts     = datetime.now().strftime("%Y-%m-%d %H:%M")
+        entry  = f"- [{ts}] {content.strip()}\n"
+        target = self.core_file if tier in ("IDENTITY", "PROCEDURAL", "SEMANTIC") else self.working_file
         text   = target.read_text(encoding="utf-8")
         header = f"## [{tier}]"
         if header in text:
-            text = text.replace(header, header + "\n" + entry, 1)
+            # Insert entry directly after the header line, preserving existing entries
+            idx  = text.index(header) + len(header)
+            text = text[:idx] + "\n" + entry + text[idx:]
         else:
             text += f"\n{header}\n{entry}"
         target.write_text(text, encoding="utf-8")
@@ -352,18 +354,16 @@ class Agent:
         if not self.memory:
             return
         try:
-            # Episodic: what happened this iteration
             summary = thought[:200]
             if obs_result and obs_result.get("summary"):
                 summary += f" | Observed: {obs_result['summary'][:100]}"
             self.memory.append_memory(summary, tier="EPISODIC")
 
-            # Semantic: if agent expressed a strong belief/conclusion
             if parsed.get("belief"):
                 self.memory.append_memory(parsed["belief"], tier="SEMANTIC")
 
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning(f"[{self.id}] memory write failed: {e}")
 
     # ── Context building ────────────────────────────────────────────────────────
 
