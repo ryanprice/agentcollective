@@ -23,6 +23,7 @@ from agents.agent import Agent
 from api.main import app, register_agents
 from bus.broker import bus
 from tools.gpu_monitor import GPUMonitor, MonitorConfig
+from logger.event_log import EventLogger
 
 logging.basicConfig(
     level=logging.INFO,
@@ -54,6 +55,10 @@ async def main(config: dict, agent_filter=None, run_api=True, snapshot=False):
         log.info(f"  ✓ {ac['id']} ({ac['model']})")
 
     register_agents(agents)
+
+    # Session event logger
+    event_logger = EventLogger()
+    bus.set_logger(event_logger)
 
     # GPU monitor
     gpu_cfg = MonitorConfig.from_dict(config.get("gpu_monitor", {}))
@@ -109,6 +114,12 @@ async def _shutdown(agents, tasks, monitor, monitor_task, snapshot=False):
         if not task.done():
             task.cancel()
     await asyncio.gather(*all_tasks, return_exceptions=True)
+
+    # Close event logger — writes summary.json
+    if bus._logger:
+        summary = bus._logger.close(agents)
+        log.info(f"Session summary: {summary['total_events']} events, "
+                 f"top concepts: {[c['concept'] for c in summary['top_concepts'][:5]]}")
 
     # Cleanly shut down the thread pool executor
     from agents.agent import _executor

@@ -251,3 +251,43 @@ async def spa_route(route: str):
             return FileResponse(str(index))
     from fastapi import HTTPException
     raise HTTPException(status_code=404, detail="Not found")
+
+# ── Session logs ──────────────────────────────────────────────────────────────
+from pathlib import Path as _Path
+import json as _json
+
+_LOGS_DIR = _Path("logs")
+
+@app.get("/logs")
+async def list_sessions():
+    manifest = _LOGS_DIR / "sessions.json"
+    if not manifest.exists():
+        return {"sessions": []}
+    return _json.loads(manifest.read_text(encoding="utf-8"))
+
+@app.get("/logs/{session_id}/summary")
+async def session_summary(session_id: str):
+    f = _LOGS_DIR / session_id / "summary.json"
+    if not f.exists():
+        from fastapi import HTTPException
+        raise HTTPException(404, "Summary not found — session may still be running")
+    return _json.loads(f.read_text(encoding="utf-8"))
+
+@app.get("/logs/{session_id}/events")
+async def session_events(session_id: str, limit: int = 1000, agent_id: str = None, phase: str = None):
+    f = _LOGS_DIR / session_id / "events.jsonl"
+    if not f.exists():
+        from fastapi import HTTPException
+        raise HTTPException(404, "Session not found")
+    events = []
+    for line in f.read_text(encoding="utf-8").splitlines():
+        try:
+            e = _json.loads(line)
+            if agent_id and e.get("agent_id") != agent_id:
+                continue
+            if phase and e.get("phase") != phase:
+                continue
+            events.append(e)
+        except Exception:
+            continue
+    return {"session_id": session_id, "total": len(events), "events": events[-limit:]}
