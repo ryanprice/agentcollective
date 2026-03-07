@@ -6,7 +6,7 @@ requests>=2.31
 python-dotenv>=1.0
 
 # Web search (no API key needed)
-duckduckgo-search>=5.0
+ddgs>=1.0
 
 # Memory engine (submodule — not pip installed)
 # Deps for memoryengine:
