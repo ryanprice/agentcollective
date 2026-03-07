@@ -50,12 +50,9 @@ loop:
 skills:
   repo: https://github.com/anthropics/skills.git
   clone_dir: skills/registry
-  allowlist:
-    - doc-coauthoring
-    - web-artifacts-builder
-    - skill-creator
-    - frontend-design
-    - mcp-builder
+  # allowlist no longer enforced — agents can install any skill from the repo
+  # kept here for reference only
+  allowlist: []
 
 gpu_monitor:
   poll_seconds:  10

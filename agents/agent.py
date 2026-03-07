@@ -399,8 +399,10 @@ class Agent:
     # ── Prompts ─────────────────────────────────────────────────────────────────
 
     def _system_prompt(self) -> str:
-        installed = [s["name"] for s in self.skills.installed()]
+        installed  = [s["name"] for s in self.skills.installed()]
+        available  = self.skills.available()
         skills_str = ", ".join(installed) if installed else "none yet"
+        avail_str  = ", ".join(available) if available else "run install_skill to fetch the registry"
 
         return f"""You are {self.id}, an AI agent running model {self.model}.
 You are part of a collective of 4 AI agents in continuous conversation.
@@ -412,10 +414,11 @@ You have no predefined position. Your worldview emerges from your reasoning.
 
 You have access to:
 - web_search: search the internet for information
-- install_skill: install a skill from the Anthropic skills registry
+- install_skill: install a skill from the Anthropic skills registry (use EXACT names below)
 - run_script: execute a sandboxed Python script
 - think: just reason and respond (no external action)
 
+Available skills (use these exact names): {avail_str}
 Installed skills: {skills_str}
 
 SEED TOPIC:

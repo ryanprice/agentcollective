@@ -23,13 +23,14 @@ AGENT_REGISTRIES = Path("skills/agents")
 
 class SkillManager:
     def __init__(self, agent_id: str, allowlist: list[str], repo_url: str = SKILLS_REPO):
-        self.agent_id    = agent_id
-        self.allowlist   = allowlist
-        self.repo_url    = repo_url
+        self.agent_id     = agent_id
+        self.allowlist    = allowlist  # kept for config compat, no longer enforced
+        self.repo_url     = repo_url
         self.registry_dir = REGISTRY_DIR
         self.agent_dir    = AGENT_REGISTRIES / agent_id
         self.log_file     = self.agent_dir / "installed.json"
         self._ensure_dirs()
+        self._available_cache: list[str] = []
 
     def _ensure_dirs(self):
         self.agent_dir.mkdir(parents=True, exist_ok=True)
@@ -42,54 +43,49 @@ class SkillManager:
     def is_installed(self, skill_name: str) -> bool:
         return any(s["name"] == skill_name for s in self.installed())
 
-    async def install(self, skill_name: str) -> dict:
-        """
-        Install a skill by name. Returns status dict.
-        """
-        skill_name = skill_name.strip().lower()
+    def available(self) -> list[str]:
+        """Return list of skill names available in the registry clone."""
+        skills_dir = self.registry_dir / "skills"
+        if skills_dir.exists():
+            self._available_cache = sorted([
+                p.name for p in skills_dir.iterdir()
+                if p.is_dir() and not p.name.startswith(".")
+            ])
+        return self._available_cache
 
-        # Allowlist check
-        if skill_name not in [a.lower() for a in self.allowlist]:
-            return {
-                "ok": False,
-                "skill": skill_name,
-                "error": f"Skill '{skill_name}' is not in allowlist: {self.allowlist}",
-            }
+    async def install(self, skill_name: str) -> dict:
+        """Install a skill by name. No allowlist restriction."""
+        skill_name = skill_name.strip().lower().replace(" ", "-")
 
         if self.is_installed(skill_name):
             return {"ok": True, "skill": skill_name, "status": "already_installed"}
 
-        # Clone sparse if repo exists, else full clone
         skill_path = self.registry_dir / "skills" / skill_name
         if not skill_path.exists():
             ok = await self._sparse_clone(skill_name)
             if not ok:
-                return {"ok": False, "skill": skill_name, "error": "Clone failed"}
+                # Try listing what's actually available to help agent choose correctly
+                avail = self.available()
+                hint  = f"Available skills: {avail}" if avail else "Could not fetch skill list."
+                return {"ok": False, "skill": skill_name, "error": f"Skill '{skill_name}' not found in registry. {hint}"}
 
-        # Read SKILL.md
         skill_md_path = skill_path / "SKILL.md"
         if not skill_md_path.exists():
             return {"ok": False, "skill": skill_name, "error": "SKILL.md not found"}
 
-        skill_md = skill_md_path.read_text(encoding="utf-8")
+        skill_md    = skill_md_path.read_text(encoding="utf-8")
         description = self._extract_description(skill_md)
 
-        # Log it
         data = json.loads(self.log_file.read_text())
         data["skills"].append({
-            "name":        skill_name,
+            "name":         skill_name,
             "installed_at": time.time(),
-            "description": description,
-            "path":        str(skill_path),
+            "description":  description,
+            "path":         str(skill_path),
         })
         self.log_file.write_text(json.dumps(data, indent=2))
 
-        return {
-            "ok":          True,
-            "skill":       skill_name,
-            "status":      "installed",
-            "description": description,
-        }
+        return {"ok": True, "skill": skill_name, "status": "installed", "description": description}
 
     def read_skill(self, skill_name: str) -> Optional[str]:
         """Return SKILL.md contents for an installed skill."""
