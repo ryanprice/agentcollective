@@ -299,7 +299,7 @@ class Agent:
         skill = action.get("skill", "")
 
         if atype == "search":
-            await bus.publish(self._event("act", f"Searching: {query}"))
+            await bus.publish(self._event("act", f"Searching: {query}", extra={"action": {"type": "search", "query": query}}))
             result = await web_search(query)
             return {
                 "type":    "search",
@@ -309,7 +309,7 @@ class Agent:
             }
 
         elif atype == "install_skill":
-            await bus.publish(self._event("act", f"Installing skill: {skill}"))
+            await bus.publish(self._event("act", f"Installing skill: {skill}", extra={"action": {"type": "install_skill", "skill": skill}}))
             result = await self.skills.install(skill)
             return {
                 "type":    "install_skill",
@@ -329,7 +329,7 @@ class Agent:
             return {"type": "run_skill", "skill": skill, "summary": "Skill not installed."}
 
         elif atype == "run_script":
-            await bus.publish(self._event("act", f"Running script ({len(code)} chars)"))
+            await bus.publish(self._event("act", f"Running script ({len(code)} chars)", extra={"action": {"type": "run_script", "code": code[:80]}}))
             result = await run_script(code)
             return {
                 "type":    "run_script",
