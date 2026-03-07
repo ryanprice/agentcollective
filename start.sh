@@ -115,15 +115,29 @@ echo -e "\${DIM}  pid \$NGROK_PID  →  \$NGROK_LOG\${NC}"
 # Poll for public URL
 PUBLIC_URL=""
 echo -ne "\${DIM}  Waiting for tunnel"
-for i in \$(seq 1 20); do
-  sleep 1; echo -n "."
+for i in \$(seq 1 40); do
+  sleep 2; echo -n "."
+  # Try localhost:4040 first
   TUNNEL_JSON=\$(curl -sf http://localhost:4040/api/tunnels 2>/dev/null || true)
+  # Fallback: try 4041 (snap ngrok sometimes uses this)
+  [[ -z "\$TUNNEL_JSON" ]] && TUNNEL_JSON=\$(curl -sf http://localhost:4041/api/tunnels 2>/dev/null || true)
+  # Fallback: snap CLI
+  [[ -z "\$TUNNEL_JSON" ]] && TUNNEL_JSON=\$(snap run ngrok api tunnels list 2>/dev/null || true)
+
   if [[ -n "\$TUNNEL_JSON" ]]; then
     PUBLIC_URL=\$(echo "\$TUNNEL_JSON" | python3 -c "
 import sys,json
 d=json.load(sys.stdin)
-for t in d.get('tunnels',[]):
-  if t.get('proto')=='https': print(t['public_url']); break
+# handle both {tunnels:[]} and {Tunnels:[]} shapes
+tunnels=d.get('tunnels', d.get('Tunnels', []))
+for t in tunnels:
+  proto=t.get('proto', t.get('Proto',''))
+  url=t.get('public_url', t.get('PublicURL',''))
+  if proto=='https' and url: print(url); break
+# if no https, take any
+for t in tunnels:
+  url=t.get('public_url', t.get('PublicURL',''))
+  if url: print(url); break
 " 2>/dev/null || true)
     [[ -n "\$PUBLIC_URL" ]] && { echo -e " ready\${NC}"; break; }
   fi
@@ -141,8 +155,11 @@ if [[ -n "\$PUBLIC_URL" ]]; then
 echo -e "  │                                                  │"
 echo -e "  │  \${PURPLE}Public\${NC}   \${BOLD}\${PUBLIC_URL}\${NC}"
 echo -e "  │  \${PURPLE}Mobile\${NC}   \${BOLD}\${PUBLIC_URL}/mobile\${NC}"
-# Write URL to a file so stop.sh / other tools can read it
 echo "\$PUBLIC_URL" > "\$LOG_DIR/public_url.txt"
+else
+echo -e "  │                                                  │"
+echo -e "  │  \${YELLOW}ngrok running — URL not detected automatically\${NC}   │"
+echo -e "  │  \${DIM}snap run ngrok api tunnels list\${NC}                │"
 fi
 echo -e "  │                                                  │"
 echo -e "  │  \${DIM}Ctrl+B then D to detach (keeps running)\${NC}        │"
