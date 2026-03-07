@@ -113,34 +113,41 @@ echo "\$NGROK_PID" >> "\$PID_FILE"
 echo -e "\${DIM}  pid \$NGROK_PID  →  \$NGROK_LOG\${NC}"
 
 # Poll for public URL
-PUBLIC_URL=""
+# Detect which port ngrok's local API is actually on (it increments if 4040 is taken)
+NGROK_PORT=""
 echo -ne "\${DIM}  Waiting for tunnel"
 for i in \$(seq 1 40); do
   sleep 2; echo -n "."
-  # Try localhost:4040 first
-  TUNNEL_JSON=\$(curl -sf http://localhost:4040/api/tunnels 2>/dev/null || true)
-  # Fallback: try 4041 (snap ngrok sometimes uses this)
-  [[ -z "\$TUNNEL_JSON" ]] && TUNNEL_JSON=\$(curl -sf http://localhost:4041/api/tunnels 2>/dev/null || true)
-  # Fallback: snap CLI
-  [[ -z "\$TUNNEL_JSON" ]] && TUNNEL_JSON=\$(snap run ngrok api tunnels list 2>/dev/null || true)
+
+  # Find the port ngrok opened using our known PID
+  if [[ -z "\$NGROK_PORT" ]]; then
+    NGROK_PORT=\$(ss -tlnp 2>/dev/null | grep "pid=\$NGROK_PID," | grep -oP '127\.0\.0\.1:\K\d+' | head -1 || true)
+  fi
+
+  [[ -z "\$NGROK_PORT" ]] && continue
+
+  TUNNEL_JSON=\$(curl -sf "http://localhost:\$NGROK_PORT/api/tunnels" 2>/dev/null || true)
 
   if [[ -n "\$TUNNEL_JSON" ]]; then
     PUBLIC_URL=\$(echo "\$TUNNEL_JSON" | python3 -c "
 import sys,json
 d=json.load(sys.stdin)
-# handle both {tunnels:[]} and {Tunnels:[]} shapes
 tunnels=d.get('tunnels', d.get('Tunnels', []))
 for t in tunnels:
   proto=t.get('proto', t.get('Proto',''))
   url=t.get('public_url', t.get('PublicURL',''))
   if proto=='https' and url: print(url); break
-# if no https, take any
 for t in tunnels:
   url=t.get('public_url', t.get('PublicURL',''))
   if url: print(url); break
 " 2>/dev/null || true)
-    [[ -n "\$PUBLIC_URL" ]] && { echo -e " ready\${NC}"; break; }
+    if [[ -n "\$PUBLIC_URL" ]]; then
+      echo -e " ready\${NC}"
+      echo "\$NGROK_PORT" > "\$LOG_DIR/ngrok_port.txt"
+      break
+    fi
   fi
+
   kill -0 \$NGROK_PID 2>/dev/null || { echo -e "\n\${YELLOW}  ⚠ ngrok exited — local only\${NC}"; break; }
 done
 
@@ -159,7 +166,8 @@ echo "\$PUBLIC_URL" > "\$LOG_DIR/public_url.txt"
 else
 echo -e "  │                                                  │"
 echo -e "  │  \${YELLOW}ngrok running — URL not detected automatically\${NC}   │"
-echo -e "  │  \${DIM}snap run ngrok api tunnels list\${NC}                │"
+SHOW_PORT=\${NGROK_PORT:-4040}
+echo -e "  │  \${DIM}curl http://localhost:\${SHOW_PORT}/api/tunnels\${NC}      │"
 fi
 echo -e "  │                                                  │"
 echo -e "  │  \${DIM}Ctrl+B then D to detach (keeps running)\${NC}        │"
