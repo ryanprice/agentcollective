@@ -273,12 +273,20 @@ async def session_summary(session_id: str):
         raise HTTPException(404, "Summary not found — session may still be running")
     return _json.loads(f.read_text(encoding="utf-8"))
 
-@app.get("/logs/{session_id}/events")
-async def session_events(session_id: str, limit: int = 1000, agent_id: str = None, phase: str = None):
-    f = _LOGS_DIR / session_id / "events.jsonl"
+@app.get("/logs/{session_id}/index")
+async def session_index(session_id: str):
+    f = _LOGS_DIR / session_id / "index.json"
     if not f.exists():
         from fastapi import HTTPException
-        raise HTTPException(404, "Session not found")
+        raise HTTPException(404, "Index not found")
+    return _json.loads(f.read_text(encoding="utf-8"))
+
+@app.get("/logs/{session_id}/chunk/{chunk_num}")
+async def session_chunk(session_id: str, chunk_num: int, phase: str = None, agent_id: str = None):
+    f = _LOGS_DIR / session_id / f"chunk_{chunk_num:03d}.jsonl"
+    if not f.exists():
+        from fastapi import HTTPException
+        raise HTTPException(404, f"Chunk {chunk_num} not found")
     events = []
     for line in f.read_text(encoding="utf-8").splitlines():
         try:
@@ -290,4 +298,4 @@ async def session_events(session_id: str, limit: int = 1000, agent_id: str = Non
             events.append(e)
         except Exception:
             continue
-    return {"session_id": session_id, "total": len(events), "events": events[-limit:]}
+    return {"session_id": session_id, "chunk": chunk_num, "total": len(events), "events": events}
