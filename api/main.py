@@ -140,6 +140,7 @@ async def status():
             "running":    agent._running,
             "loop_count": agent._loop_count,
             "skills":     agent.skills.installed(),
+            "tokens":     agent.token_stats(),
         }
     return {
         "uptime_seconds": time.time() - _start_time,
@@ -262,7 +263,7 @@ async def mobile_view():
     raise HTTPException(404, "Mobile view not found")
 
 # SPA catch-all — MUST be last so it doesn't shadow API routes
-_SPA_ROUTES = {"streams", "bus", "tools", "map", "memory", "gpu", "about"}
+_SPA_ROUTES = {"streams", "bus", "tools", "map", "memory", "gpu", "tokens", "about"}
 
 @app.get("/{route}")
 async def spa_route(route: str):

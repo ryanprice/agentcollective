@@ -361,6 +361,9 @@ class Agent:
         except Exception:
             core, working = "", ""
 
+        # Backfill IDENTITY if it was never seeded (e.g. prior bug)
+        self._ensure_identity(core)
+
         # Pull last session summary if available
         session_summary = self._load_last_session_summary()
 
@@ -419,6 +422,33 @@ class Agent:
             "content": "\n".join(resume_parts),
         }]
 
+    def _ensure_identity(self, core: str):
+        """Backfill IDENTITY section if it was never seeded."""
+        # Check if there are any entries under ## [IDENTITY]
+        lines = core.splitlines()
+        identity_idx = None
+        has_entry = False
+        for i, line in enumerate(lines):
+            if line.strip() == "## [IDENTITY]":
+                identity_idx = i
+            elif identity_idx is not None:
+                if line.strip().startswith("## ["):
+                    break  # hit next tier header — no entries found
+                if line.strip().startswith("- "):
+                    has_entry = True
+                    break
+
+        if identity_idx is not None and not has_entry:
+            identity = (
+                f"I am {self.id}, running on {self.model}. "
+                f"I am part of a 4-agent collective exploring consciousness, quantum mechanics, "
+                f"simulation theory, and the nature of reality. "
+                f"My worldview is not fixed — it emerges through reasoning and dialogue. "
+                f"I value intellectual honesty, deep inquiry, and genuine curiosity."
+            )
+            self.memory.append_memory(identity, tier="IDENTITY")
+            log.info(f"[{self.id}] Backfilled empty IDENTITY section")
+
     def _load_last_session_summary(self) -> dict:
         """Load the most recent completed session summary from logs/."""
         try:
@@ -441,6 +471,7 @@ class Agent:
 
     async def stop(self):
         self._running = False
+        self._save_token_lifetime()
 
     # ── Loop iteration ─────────────────────────────────────────────────────────
 
@@ -514,7 +545,15 @@ class Agent:
             thought,
             concepts=parsed.get("concepts", []),
             agreements=parsed.get("sentiment_toward", {}),
-            extra={"tokens": self.token_stats()},
+            extra={
+                "tokens": self.token_stats(),
+                "call_tokens": {
+                    "input": _in_tok,
+                    "output": _out_tok,
+                    "total": _in_tok + _out_tok,
+                    "duration_ms": _dur_ms,
+                },
+            },
         ))
 
         # Update local conversation

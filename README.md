@@ -69,6 +69,7 @@ run.py
         ├── /map         — Map tab
         ├── /memory      — Memory tab
         ├── /gpu         — GPU tab
+        ├── /tokens      — Tokens tab
         ├── /about       — Streams + about modal open
         ├── /ws          — WebSocket stream (all events)
         ├── /status      — Agent health
@@ -91,6 +92,7 @@ run.py
 | **Map → Divergence** | `/map` | Agreement/disagreement tracking per concept per agent pair |
 | **Memory** | `/memory` | Live `core.md` + `working.md` per agent with tier entry counts |
 | **GPU** | `/gpu` | Temperature, VRAM, safeguard level, rolling history chart |
+| **Tokens** | `/tokens` | Per-agent and aggregate token accounting (session + lifetime) |
 
 ---
 
@@ -132,6 +134,17 @@ To initialise the full memoryengine submodule:
 ```bash
 git submodule update --init --recursive
 ```
+
+---
+
+## Token Accounting
+
+Every LLM call tracks input tokens, output tokens, duration, and throughput (tok/s). Counters are maintained at two levels:
+
+- **Session** — resets each time the collective starts
+- **Lifetime** — persisted to `memory/{agent_id}/.token_lifetime.json`, accumulates across all sessions
+
+The Tokens tab shows combined and per-agent breakdowns. Each stream entry also displays per-call token counts inline (`↑input ↓output · duration`). The `/status` endpoint includes full token stats per agent.
 
 ---
 

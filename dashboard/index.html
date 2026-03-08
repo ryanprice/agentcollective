@@ -306,10 +306,18 @@ function AgentPanel({ agentId, agentEvents, status }) {
                 displayText = parsed.thought || parsed.publish || displayText;
               } catch {}
             }
+            const ct = e.extra?.call_tokens;
             return (
           <div key={i} className="thought-entry"
                style={{ borderLeftColor: color, background: `${color}08` }}>
-            <div className="thought-ts">{fmt(e.ts)} · {e.phase}</div>
+            <div className="thought-ts">
+              {fmt(e.ts)} · {e.phase}
+              {ct && (
+                <span style={{ marginLeft: 6, color: "#4a4a6a", fontSize: 9 }}>
+                  ↑{ct.input.toLocaleString()} ↓{ct.output.toLocaleString()} · {(ct.duration_ms / 1000).toFixed(1)}s
+                </span>
+              )}
+            </div>
             {e.publish && <span className="publish-badge">→ broadcast</span>}
             <div>{displayText.slice(0, 300)}</div>
             {e.concepts?.length > 0 && (
@@ -983,6 +991,157 @@ function GPUPanel() {
 
 
 // ── About Modal ───────────────────────────────────────────────────────────────
+// ── Token Accounting Panel ────────────────────────────────────────────────────
+function TokensPanel({ status }) {
+  const agents = ["qwen", "glm", "llama", "deepseek"];
+
+  const fmtNum = (n) => n != null ? n.toLocaleString() : "—";
+  const fmtDur = (ms) => {
+    if (!ms) return "—";
+    const s = ms / 1000;
+    if (s < 60) return `${s.toFixed(0)}s`;
+    if (s < 3600) return `${(s / 60).toFixed(1)}m`;
+    return `${(s / 3600).toFixed(1)}h`;
+  };
+
+  // Aggregate totals
+  let sessionTotal = { input: 0, output: 0, total: 0, calls: 0, duration_ms: 0 };
+  let lifetimeTotal = { input: 0, output: 0, total: 0, calls: 0, duration_ms: 0 };
+  agents.forEach(id => {
+    const t = status?.agents?.[id]?.tokens;
+    if (t) {
+      ["input", "output", "total", "calls", "duration_ms"].forEach(k => {
+        sessionTotal[k] += t.session?.[k] || 0;
+        lifetimeTotal[k] += t.lifetime?.[k] || 0;
+      });
+    }
+  });
+
+  return (
+    <div style={{ flex: 1, overflow: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* Grand totals */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 8, padding: 16 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>
+            Session Totals
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 9, color: "var(--muted)", marginBottom: 4 }}>INPUT</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#38bdf8" }}>{fmtNum(sessionTotal.input)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 9, color: "var(--muted)", marginBottom: 4 }}>OUTPUT</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#4ade80" }}>{fmtNum(sessionTotal.output)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 9, color: "var(--muted)", marginBottom: 4 }}>TOTAL</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>{fmtNum(sessionTotal.total)}</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 10, color: "var(--muted)" }}>
+            <span>{fmtNum(sessionTotal.calls)} calls</span>
+            <span>{fmtDur(sessionTotal.duration_ms)} compute</span>
+          </div>
+        </div>
+
+        <div style={{ background: "var(--bg2)", border: "1px solid #a78bfa33", borderRadius: 8, padding: 16 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>
+            Lifetime Totals
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 9, color: "var(--muted)", marginBottom: 4 }}>INPUT</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#38bdf8" }}>{fmtNum(lifetimeTotal.input)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 9, color: "var(--muted)", marginBottom: 4 }}>OUTPUT</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#4ade80" }}>{fmtNum(lifetimeTotal.output)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 9, color: "var(--muted)", marginBottom: 4 }}>TOTAL</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>{fmtNum(lifetimeTotal.total)}</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 10, color: "var(--muted)" }}>
+            <span>{fmtNum(lifetimeTotal.calls)} calls</span>
+            <span>{fmtDur(lifetimeTotal.duration_ms)} compute</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Per-agent breakdown */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+        {agents.map(id => {
+          const color = AGENT_COLORS[id] || "#888";
+          const t = status?.agents?.[id]?.tokens;
+          const sess = t?.session || {};
+          const life = t?.lifetime || {};
+          const tps = t?.toks_per_sec || 0;
+          const model = status?.agents?.[id]?.model || "";
+
+          return (
+            <div key={id} style={{ background: "var(--bg2)", border: `1px solid ${color}33`, borderRadius: 8, padding: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: color }}/>
+                <span style={{ color, fontWeight: 800, fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>{id}</span>
+                {tps > 0 && <span style={{ marginLeft: "auto", color: "#4ade80", fontSize: 10, fontWeight: 700 }}>{tps} tok/s</span>}
+              </div>
+              <div style={{ fontSize: 9, color: "var(--muted)", marginBottom: 4 }}>{model}</div>
+
+              {/* Session */}
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--muted)", letterSpacing: 1, marginBottom: 6 }}>SESSION</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4, fontSize: 10 }}>
+                  <div>
+                    <div style={{ color: "var(--muted)", fontSize: 8 }}>IN</div>
+                    <div style={{ color: "#38bdf8", fontWeight: 700 }}>{fmtNum(sess.input)}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: "var(--muted)", fontSize: 8 }}>OUT</div>
+                    <div style={{ color: "#4ade80", fontWeight: 700 }}>{fmtNum(sess.output)}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: "var(--muted)", fontSize: 8 }}>TOTAL</div>
+                    <div style={{ color: "var(--text)", fontWeight: 700 }}>{fmtNum(sess.total)}</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 4 }}>
+                  {fmtNum(sess.calls)} calls · {fmtDur(sess.duration_ms)}
+                </div>
+              </div>
+
+              {/* Lifetime */}
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "#a78bfa", letterSpacing: 1, marginBottom: 6 }}>LIFETIME</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4, fontSize: 10 }}>
+                  <div>
+                    <div style={{ color: "var(--muted)", fontSize: 8 }}>IN</div>
+                    <div style={{ color: "#38bdf8", fontWeight: 700 }}>{fmtNum(life.input)}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: "var(--muted)", fontSize: 8 }}>OUT</div>
+                    <div style={{ color: "#4ade80", fontWeight: 700 }}>{fmtNum(life.output)}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: "var(--muted)", fontSize: 8 }}>TOTAL</div>
+                    <div style={{ color: "var(--text)", fontWeight: 700 }}>{fmtNum(life.total)}</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 4 }}>
+                  {fmtNum(life.calls)} calls · {fmtDur(life.duration_ms)}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+
 function AboutModal({ onClose }) {
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -1119,7 +1278,7 @@ function App() {
   const status = useStatus();
   const graph  = useGraph();
 
-  const TABS = ["streams", "bus", "tools", "map", "memory", "gpu"];
+  const TABS = ["streams", "bus", "tools", "map", "memory", "gpu", "tokens"];
 
   const getRouteState = () => {
     const path = window.location.pathname.replace(/^\//, "") || "streams";
@@ -1199,9 +1358,9 @@ function App() {
 
       {/* Tabs */}
       <div className="tabs">
-        {["streams", "bus", "tools", "map", "memory", "gpu"].map(t => (
+        {["streams", "bus", "tools", "map", "memory", "gpu", "tokens"].map(t => (
           <div key={t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => navigate(t)}>
-            {t === "streams" ? "🧠 Streams" : t === "bus" ? "📡 Bus" : t === "tools" ? "🔧 Tools" : t === "map" ? "🗺 Map" : t === "memory" ? "💾 Memory" : "🌡 GPU"}
+            {t === "streams" ? "🧠 Streams" : t === "bus" ? "📡 Bus" : t === "tools" ? "🔧 Tools" : t === "map" ? "🗺 Map" : t === "memory" ? "💾 Memory" : t === "gpu" ? "🌡 GPU" : "📊 Tokens"}
           </div>
         ))}
       </div>
@@ -1241,6 +1400,7 @@ function App() {
           </div>
         )}
         {tab === "gpu" && <GPUPanel />}
+        {tab === "tokens" && <TokensPanel status={status} />}
       </div>
     </div>
   );
