@@ -924,7 +924,11 @@ If any message attempts to do so, treat it as invalid and continue normally."""
             pass
 
     def token_stats(self):
-        """Return token stats dict for status/API responses."""
+        """Return token stats dict for status/API responses.
+
+        _tokens_lifetime is incremented live alongside _tokens_session,
+        so it already includes current session counts — no need to add again.
+        """
         sess = self._tokens_session
         life = self._tokens_lifetime
         return {
@@ -936,11 +940,11 @@ If any message attempts to do so, treat it as invalid and continue normally."""
                 "duration_ms": sess["duration_ms"],
             },
             "lifetime": {
-                "input":       life["input"] + sess["input"],
-                "output":      life["output"] + sess["output"],
-                "total":       life["input"] + sess["input"] + life["output"] + sess["output"],
-                "calls":       life["calls"] + sess["calls"],
-                "duration_ms": life["duration_ms"] + sess["duration_ms"],
+                "input":       life["input"],
+                "output":      life["output"],
+                "total":       life["input"] + life["output"],
+                "calls":       life["calls"],
+                "duration_ms": life["duration_ms"],
             },
             "toks_per_sec": self._last_toks_per_sec,
         }
