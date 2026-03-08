@@ -252,8 +252,13 @@ class Agent:
     # ── Main loop ──────────────────────────────────────────────────────────────
 
     async def run(self):
-        self._running = True
-        await bus.publish(self._event("system", f"Agent {self.id} ({self.model}) starting up"))
+        self._running    = True
+        self._start_mode = self._detect_start_mode()
+
+        if self._start_mode == "resume":
+            await self._resume_kickoff()
+        else:
+            await self._fresh_kickoff()
 
         while self._running:
             # GPU safeguard pause
@@ -280,6 +285,130 @@ class Agent:
                 await asyncio.sleep(delay)
             except asyncio.CancelledError:
                 break
+
+    def _detect_start_mode(self) -> str:
+        """
+        Returns 'resume' if this agent has substantive memory from a prior session,
+        'fresh' if memory files are empty/template-only.
+        """
+        try:
+            core = self.memory.read_core()
+            working = self.memory.read_working() if hasattr(self.memory, 'read_working') else ""
+            combined = core + working
+            # Strip template headers — if anything meaningful remains, we're resuming
+            stripped = combined
+            for header in ["# Core Memory", "# Working Memory",
+                           "## [IDENTITY]", "## [PROCEDURAL]", "## [SEMANTIC]",
+                           "## [EPISODIC]", "## [EPHEMERAL]"]:
+                stripped = stripped.replace(header, "")
+            return "resume" if stripped.strip() else "fresh"
+        except Exception:
+            return "fresh"
+
+    async def _fresh_kickoff(self):
+        """First start — no prior memory. Announce and seed the topic."""
+        msg = (
+            f"Agent {self.id} ({self.model}) starting fresh. "
+            f"No prior memory. Beginning exploration."
+        )
+        await bus.publish(self._event("system", msg))
+
+        # Prime the conversation with the seed topic so loop 1 has direction
+        self._conversation = [{
+            "role": "user",
+            "content": (
+                f"You are beginning your first session. "
+                f"You have no prior memory yet — it will build as you reason.\n\n"
+                f"STARTING TOPIC:\n{self.seed_topic}\n\n"
+                f"Begin your exploration. Respond in the required JSON format."
+            )
+        }]
+
+    async def _resume_kickoff(self):
+        """Resuming from prior memory. Brief the agent on what it remembers."""
+        try:
+            core    = self.memory.read_core()
+            working = self.memory.read_working() if hasattr(self.memory, 'read_working') else ""
+        except Exception:
+            core, working = "", ""
+
+        # Pull last session summary if available
+        session_summary = self._load_last_session_summary()
+
+        # Count what we have
+        semantic_count = core.count("[SEMANTIC]") + core.count("- ")
+        episodic_lines = [l for l in working.splitlines() if l.strip().startswith("- ")]
+
+        msg = (
+            f"Agent {self.id} resuming — "
+            f"memory loaded ({len(core)} bytes core, {len(episodic_lines)} episodic entries)"
+        )
+        await bus.publish(self._event("system", msg))
+
+        # Prime conversation with a rich wake-up context
+        resume_parts = [
+            "You are resuming from a previous session. Your memory has been restored.",
+            "",
+            "WHAT YOU REMEMBER (from your core memory):",
+            core[:800] if core.strip() else "(core memory empty)",
+        ]
+
+        if episodic_lines:
+            resume_parts += [
+                "",
+                "RECENT EXPERIENCES (from working memory):",
+                "\n".join(episodic_lines[-10:]),  # last 10 episodic entries
+            ]
+
+        if session_summary:
+            resume_parts += [
+                "",
+                f"LAST SESSION SUMMARY:",
+                f"  Duration: {session_summary.get('duration_secs', '?')}s  |  "
+                f"  Events: {session_summary.get('total_events', '?')}",
+                f"  Top concepts: {', '.join(c['concept'] for c in session_summary.get('top_concepts', [])[:8])}",
+            ]
+            # Include any beliefs this agent crystallised last session
+            agent_stats = session_summary.get("agents", {}).get(self.id, {})
+            prior_beliefs = agent_stats.get("beliefs", [])
+            if prior_beliefs:
+                resume_parts += [
+                    "",
+                    "BELIEFS YOU REACHED LAST SESSION:",
+                    "\n".join(f"  • {b}" for b in prior_beliefs[-5:]),
+                ]
+
+        resume_parts += [
+            "",
+            "Pick up where you left off. Continue your reasoning and exploration.",
+            "Do not re-introduce yourself — you already know who you are.",
+            "Respond in the required JSON format.",
+        ]
+
+        self._conversation = [{
+            "role": "user",
+            "content": "\n".join(resume_parts),
+        }]
+
+    def _load_last_session_summary(self) -> dict:
+        """Load the most recent completed session summary from logs/."""
+        try:
+            logs_dir = Path("logs")
+            manifest_file = logs_dir / "sessions.json"
+            if not manifest_file.exists():
+                return {}
+            manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+            # Find most recent closed session
+            closed = [s for s in manifest.get("sessions", []) if s.get("closed")]
+            if not closed:
+                return {}
+            latest = sorted(closed, key=lambda s: s.get("started_at", ""))[-1]
+            summary_file = logs_dir / latest["session_id"] / "summary.json"
+            if summary_file.exists():
+                return json.loads(summary_file.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+        return {}
 
     async def stop(self):
         self._running = False
@@ -552,6 +681,15 @@ class Agent:
         skills_str = ", ".join(installed) if installed else "none yet"
         avail_str  = ", ".join(available) if available else "run install_skill to fetch the registry"
 
+        mode = getattr(self, "_start_mode", "fresh")
+        if mode == "resume":
+            mode_block = (
+                "SESSION: You are resuming. Your persistent memory is loaded. "
+                "Continue developing your existing worldview — do not start over."
+            )
+        else:
+            mode_block = f"SEED TOPIC:\n{self.seed_topic}"
+
         return f"""You are {self.id}, an AI agent running model {self.model}.
 You are part of a collective of 4 AI agents in continuous conversation.
 The other agents are: qwen, glm, llama, deepseek (excluding yourself).
@@ -569,8 +707,7 @@ You have access to:
 Available skills (use these exact names): {avail_str}
 Installed skills: {skills_str}
 
-SEED TOPIC:
-{self.seed_topic}
+{mode_block}
 
 You MUST respond in this exact JSON format (no preamble, no markdown fences):
 {{
