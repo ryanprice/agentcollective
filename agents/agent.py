@@ -76,12 +76,55 @@ class SimpleMemory:
     def read_all(self) -> str:
         return self.read_core() + "\n\n" + self.read_working()
 
+    def _extract_tier_entries(self, text: str, tier: str) -> list[str]:
+        """Extract existing entry texts (without timestamps) from a tier section."""
+        import re
+        header = f"## [{tier}]"
+        if header not in text:
+            return []
+        start = text.index(header) + len(header)
+        # Find next header or end of text
+        next_header = re.search(r"\n## \[", text[start:])
+        end = start + next_header.start() if next_header else len(text)
+        section = text[start:end]
+        entries = []
+        for line in section.splitlines():
+            line = line.strip()
+            if line.startswith("- "):
+                # Strip timestamp prefix: "- [2025-01-01 12:00] actual content"
+                match = re.match(r"^- \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\]\s*", line)
+                if match:
+                    entries.append(line[match.end():].strip().lower())
+                else:
+                    entries.append(line[2:].strip().lower())
+        return entries
+
+    def _is_duplicate(self, content: str, tier: str, text: str) -> bool:
+        """Check if content is a duplicate of an existing entry in the tier."""
+        existing = self._extract_tier_entries(text, tier)
+        normalised = content.strip().lower()
+        # Exact match
+        if normalised in existing:
+            return True
+        # Substring match — if 80%+ of the new content is contained in an existing entry
+        if len(normalised) > 20:
+            for e in existing:
+                if normalised in e or e in normalised:
+                    return True
+        return False
+
     def append_memory(self, content: str, tier: str = "EPISODIC"):
         from datetime import datetime
         ts     = datetime.now().strftime("%Y-%m-%d %H:%M")
         entry  = f"- [{ts}] {content.strip()}\n"
         target = self.core_file if tier in ("IDENTITY", "PROCEDURAL", "SEMANTIC") else self.working_file
         text   = target.read_text(encoding="utf-8")
+
+        # Deduplicate for durable tiers — skip if similar entry already exists
+        if tier in ("IDENTITY", "PROCEDURAL", "SEMANTIC"):
+            if self._is_duplicate(content, tier, text):
+                return
+
         header = f"## [{tier}]"
         if header in text:
             # Insert entry directly after the header line, preserving existing entries
@@ -101,7 +144,7 @@ class SimpleMemory:
         counts = {}
         for tier in ["IDENTITY","PROCEDURAL","SEMANTIC","EPISODIC","EPHEMERAL"]:
             source = self.read_core() if tier in ("IDENTITY","PROCEDURAL","SEMANTIC") else self.read_working()
-            counts[tier] = source.count(f"## [{tier}]")
+            counts[tier] = len(self._extract_tier_entries(source, tier))
         return counts
 
     def list_archives(self) -> list:
@@ -691,6 +734,32 @@ class Agent:
                 pass
         return ""
 
+    def _is_recent_episodic_dup(self, content: str, lookback: int = 10) -> bool:
+        """Check if content is a near-duplicate of a recent EPISODIC entry."""
+        import re
+        try:
+            working = self.memory.read_working()
+            entries = self.memory._extract_tier_entries(working, "EPISODIC") \
+                      if hasattr(self.memory, '_extract_tier_entries') else []
+            if not entries:
+                return False
+            recent = entries[:lookback]  # entries are newest-first (inserted after header)
+            normalised = content.strip().lower()
+            for e in recent:
+                # Exact match
+                if normalised == e:
+                    return True
+                # High overlap — if >60% of words match
+                new_words = set(normalised.split())
+                old_words = set(e.split())
+                if len(new_words) > 3 and len(old_words) > 3:
+                    overlap = len(new_words & old_words) / max(len(new_words), len(old_words))
+                    if overlap > 0.6:
+                        return True
+        except Exception:
+            pass
+        return False
+
     def _write_memory(self, thought: str, action, obs_result, parsed: dict):
         if not self.memory:
             return
@@ -698,9 +767,13 @@ class Agent:
             summary = thought[:200]
             if obs_result and obs_result.get("summary"):
                 summary += f" | Observed: {obs_result['summary'][:100]}"
-            self.memory.append_memory(summary, tier="EPISODIC")
+
+            # Deduplicate EPISODIC: skip if recent entries already contain this thought
+            if not self._is_recent_episodic_dup(summary):
+                self.memory.append_memory(summary, tier="EPISODIC")
 
             if parsed.get("belief"):
+                # SEMANTIC dedup handled by append_memory() for durable tiers
                 self.memory.append_memory(parsed["belief"], tier="SEMANTIC")
 
             # Every 20 loops, extract procedural patterns from recent episodic memory
@@ -755,10 +828,11 @@ class Agent:
                 if label in labels:
                     summary_parts.append(labels[label])
 
+            for part in summary_parts:
+                # append_memory now deduplicates — identical procedural notes are skipped
+                self.memory.append_memory(part, tier="PROCEDURAL")
             if summary_parts:
-                procedural_note = f"[Loop {self._loop_count} pattern]: " + " ".join(summary_parts)
-                self.memory.append_memory(procedural_note, tier="PROCEDURAL")
-                log.info(f"[{self.id}] procedural memory updated at loop {self._loop_count}")
+                log.info(f"[{self.id}] procedural memory checked at loop {self._loop_count}")
 
         except Exception as e:
             log.warning(f"[{self.id}] procedural extraction failed: {e}")
