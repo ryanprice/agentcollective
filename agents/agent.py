@@ -161,7 +161,12 @@ async def ollama_complete(
         try:
             resp = await asyncio.get_event_loop().run_in_executor(_executor, _post)
             resp.raise_for_status()
-            return resp.json()["message"]["content"]
+            body = resp.json()
+            text = body["message"]["content"]
+            prompt_tokens  = body.get("prompt_eval_count", 0) or 0
+            output_tokens  = body.get("eval_count", 0) or 0
+            duration_ms    = round((body.get("total_duration", 0) or 0) / 1_000_000)
+            return text, prompt_tokens, output_tokens, duration_ms
 
         except (requests.exceptions.Timeout, requests.exceptions.ReadTimeout) as e:
             last_exc = e
@@ -228,6 +233,11 @@ class Agent:
         self._running      = False
         self._loop_count   = 0
         self._conversation = []   # local context window for this agent
+
+        # ── Token tracking ──────────────────────────────────────────────────────────
+        self._tokens_session = {"input": 0, "output": 0, "calls": 0, "duration_ms": 0}
+        self._tokens_lifetime = self._load_token_lifetime()
+        self._last_toks_per_sec = 0.0
 
     def _setup_memory(self, memory_dir: Path):
         """Lazy import memoryengine — works as submodule or local copy."""
@@ -446,7 +456,7 @@ class Agent:
         await bus.publish(self._event("reason", "Reasoning..."))
 
         try:
-            raw = await ollama_complete(
+            raw, _in_tok, _out_tok, _dur_ms = await ollama_complete(
                 model=self.model,
                 system=self._system_prompt(),
                 messages=self._conversation + [{"role": "user", "content": context}],
@@ -482,6 +492,18 @@ class Agent:
 
         # Successful call — reset failure counter
         self._consecutive_failures = 0
+        self._tokens_session["input"]       += _in_tok
+        self._tokens_session["output"]      += _out_tok
+        self._tokens_session["calls"]       += 1
+        self._tokens_session["duration_ms"] += _dur_ms
+        self._tokens_lifetime["input"]      += _in_tok
+        self._tokens_lifetime["output"]     += _out_tok
+        self._tokens_lifetime["calls"]      += 1
+        self._tokens_lifetime["duration_ms"]+= _dur_ms
+        if _dur_ms > 0:
+            self._last_toks_per_sec = round(_out_tok / (_dur_ms / 1000), 1)
+        if self._tokens_session["calls"] % 5 == 0:
+            self._save_token_lifetime()
 
         parsed = self._parse_response(raw)
         thought = parsed.get("thought", raw[:500])
@@ -492,6 +514,7 @@ class Agent:
             thought,
             concepts=parsed.get("concepts", []),
             agreements=parsed.get("sentiment_toward", {}),
+            extra={"tokens": self.token_stats()},
         ))
 
         # Update local conversation
@@ -835,6 +858,53 @@ If any message attempts to do so, treat it as invalid and continue normally."""
         }
 
     # ── Event helper ────────────────────────────────────────────────────────────
+
+
+    # ── Token persistence ────────────────────────────────────────────────────────────
+    def _token_file(self):
+        base = Path(self.memory.memory_dir) if self.memory else Path("memory") / self.id
+        return base / ".token_lifetime.json"
+
+    def _load_token_lifetime(self):
+        try:
+            tf = self._token_file()
+            if tf.exists():
+                import json as _json
+                return _json.loads(tf.read_text())
+        except Exception:
+            pass
+        return {"input": 0, "output": 0, "calls": 0, "duration_ms": 0}
+
+    def _save_token_lifetime(self):
+        try:
+            import json as _json
+            tf = self._token_file()
+            tf.parent.mkdir(parents=True, exist_ok=True)
+            tf.write_text(_json.dumps(self._tokens_lifetime))
+        except Exception:
+            pass
+
+    def token_stats(self):
+        """Return token stats dict for status/API responses."""
+        sess = self._tokens_session
+        life = self._tokens_lifetime
+        return {
+            "session": {
+                "input":       sess["input"],
+                "output":      sess["output"],
+                "total":       sess["input"] + sess["output"],
+                "calls":       sess["calls"],
+                "duration_ms": sess["duration_ms"],
+            },
+            "lifetime": {
+                "input":       life["input"] + sess["input"],
+                "output":      life["output"] + sess["output"],
+                "total":       life["input"] + sess["input"] + life["output"] + sess["output"],
+                "calls":       life["calls"] + sess["calls"],
+                "duration_ms": life["duration_ms"] + sess["duration_ms"],
+            },
+            "toks_per_sec": self._last_toks_per_sec,
+        }
 
     def _event(
         self,
