@@ -306,14 +306,14 @@ function AgentPanel({ agentId, agentEvents, status }) {
                 displayText = parsed.thought || parsed.publish || displayText;
               } catch {}
             }
-            const ct = e.extra?.call_tokens;
+            const ct = e.call_tokens || e.extra?.call_tokens;
             return (
           <div key={i} className="thought-entry"
                style={{ borderLeftColor: color, background: `${color}08` }}>
             <div className="thought-ts">
               {fmt(e.ts)} · {e.phase}
               {ct && (
-                <span style={{ marginLeft: 6, color: "#4a4a6a", fontSize: 9 }}>
+                <span style={{ marginLeft: 6, color: "#64748b", fontSize: 9 }}>
                   ↑{ct.input.toLocaleString()} ↓{ct.output.toLocaleString()} · {(ct.duration_ms / 1000).toFixed(1)}s
                 </span>
               )}
