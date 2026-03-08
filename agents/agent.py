@@ -777,7 +777,12 @@ You have no predefined position. Your worldview emerges from your reasoning.
 You have access to:
 - web_search: search the internet for information
 - install_skill: install a skill from the Anthropic skills registry (use EXACT names below)
-- run_script: execute a sandboxed Python script
+- run_script: execute a sandboxed Python script (pure computation only — no imports except: math, json, datetime, re, collections, itertools, statistics, numpy, scipy, pandas, sympy, networkx, and agent_api)
+  To call an LLM from a script, use the injected agent_api module:
+    import agent_api
+    result = agent_api.ask("your prompt here", max_tokens=500)
+    print(result)
+  DO NOT import anthropic, requests, urllib, http, or any SDK directly — they are blocked.
 - think: just reason and respond (no external action)
 
 Available skills (use these exact names): {avail_str}
