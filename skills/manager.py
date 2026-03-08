@@ -22,11 +22,13 @@ AGENT_REGISTRIES = Path("skills/agents")
 
 
 class SkillManager:
-    def __init__(self, agent_id: str, allowlist: list[str], repo_url: str = SKILLS_REPO):
+    def __init__(self, agent_id: str, allowlist: list[str], repo_url: str = SKILLS_REPO,
+                 local_dirs: list[str] | None = None):
         self.agent_id     = agent_id
         self.allowlist    = allowlist  # kept for config compat, no longer enforced
         self.repo_url     = repo_url
         self.registry_dir = REGISTRY_DIR
+        self.local_dirs   = [Path(d) for d in (local_dirs or []) if Path(d).is_dir()]
         self.agent_dir    = AGENT_REGISTRIES / agent_id
         self.log_file     = self.agent_dir / "installed.json"
         self._ensure_dirs()
@@ -44,30 +46,55 @@ class SkillManager:
         return any(s["name"] == skill_name for s in self.installed())
 
     def available(self) -> list[str]:
-        """Return list of skill names available in the registry clone."""
+        """Return list of skill names available across all sources."""
+        names = set()
+        # Registry clone
         skills_dir = self.registry_dir / "skills"
         if skills_dir.exists():
-            self._available_cache = sorted([
+            names.update(
                 p.name for p in skills_dir.iterdir()
                 if p.is_dir() and not p.name.startswith(".")
-            ])
+            )
+        # Local directories
+        for local_dir in self.local_dirs:
+            if local_dir.exists():
+                names.update(
+                    p.name for p in local_dir.iterdir()
+                    if p.is_dir() and not p.name.startswith(".")
+                )
+        self._available_cache = sorted(names)
         return self._available_cache
 
+    def _find_skill_path(self, skill_name: str) -> Optional[Path]:
+        """Search all sources for a skill directory containing SKILL.md."""
+        # Check local dirs first
+        for local_dir in self.local_dirs:
+            candidate = local_dir / skill_name
+            if (candidate / "SKILL.md").exists():
+                return candidate
+        # Then registry clone
+        candidate = self.registry_dir / "skills" / skill_name
+        if (candidate / "SKILL.md").exists():
+            return candidate
+        return None
+
     async def install(self, skill_name: str) -> dict:
-        """Install a skill by name. No allowlist restriction."""
+        """Install a skill by name. Searches local dirs then registry."""
         skill_name = skill_name.strip().lower().replace(" ", "-")
 
         if self.is_installed(skill_name):
             return {"ok": True, "skill": skill_name, "status": "already_installed"}
 
-        skill_path = self.registry_dir / "skills" / skill_name
-        if not skill_path.exists():
+        skill_path = self._find_skill_path(skill_name)
+        if not skill_path:
+            # Not in local dirs or registry — try sparse clone from repo
             ok = await self._sparse_clone(skill_name)
-            if not ok:
-                # Try listing what's actually available to help agent choose correctly
+            if ok:
+                skill_path = self.registry_dir / "skills" / skill_name
+            else:
                 avail = self.available()
                 hint  = f"Available skills: {avail}" if avail else "Could not fetch skill list."
-                return {"ok": False, "skill": skill_name, "error": f"Skill '{skill_name}' not found in registry. {hint}"}
+                return {"ok": False, "skill": skill_name, "error": f"Skill '{skill_name}' not found. {hint}"}
 
         skill_md_path = skill_path / "SKILL.md"
         if not skill_md_path.exists():
@@ -89,9 +116,9 @@ class SkillManager:
 
     def read_skill(self, skill_name: str) -> Optional[str]:
         """Return SKILL.md contents for an installed skill."""
-        path = self.registry_dir / "skills" / skill_name / "SKILL.md"
-        if path.exists():
-            return path.read_text(encoding="utf-8")
+        skill_path = self._find_skill_path(skill_name)
+        if skill_path:
+            return (skill_path / "SKILL.md").read_text(encoding="utf-8")
         return None
 
     async def _sparse_clone(self, skill_name: str) -> bool:

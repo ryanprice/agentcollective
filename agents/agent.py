@@ -226,9 +226,10 @@ class Agent:
         self._setup_memory(memory_dir)
 
         # Skills
-        allowlist = global_config.get("skills", {}).get("allowlist", [])
-        repo      = global_config.get("skills", {}).get("repo", "https://github.com/anthropics/skills.git")
-        self.skills = SkillManager(self.id, allowlist, repo)
+        allowlist  = global_config.get("skills", {}).get("allowlist", [])
+        repo       = global_config.get("skills", {}).get("repo", "https://github.com/anthropics/skills.git")
+        local_dirs = global_config.get("skills", {}).get("local_dirs", [])
+        self.skills = SkillManager(self.id, allowlist, repo, local_dirs=local_dirs)
 
         self._running      = False
         self._loop_count   = 0

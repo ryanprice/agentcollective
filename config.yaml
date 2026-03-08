@@ -61,6 +61,9 @@ loop:
 skills:
   repo: https://github.com/anthropics/skills.git
   clone_dir: skills/registry
+  # Local skill directories — searched before the remote registry
+  local_dirs:
+    - ../claude-scientific-skills/scientific-skills
   # allowlist no longer enforced — agents can install any skill from the repo
   # kept here for reference only
   allowlist: []
