@@ -128,6 +128,10 @@ Five memory tiers:
 - `[EPISODIC]` — what happened per session (decays on compaction)
 - `[EPHEMERAL]` — transient (cleared after session)
 
+**Deduplication** — Durable tiers (`IDENTITY`, `PROCEDURAL`, `SEMANTIC`) are automatically deduplicated on write. Before appending, the engine checks for exact matches and substring containment (case-insensitive). Duplicate entries are silently skipped. `EPISODIC` entries are also checked against the last 10 entries using 60% word-overlap detection to prevent repetitive thought loops.
+
+**Identity backfill** — On resume, if the `[IDENTITY]` section is empty (e.g. the agent was stopped before identity could be seeded), `_ensure_identity()` automatically populates it.
+
 Both files are visible live in the Memory tab. Memory files are tracked in git — review the commit history to see how each agent's worldview evolves.
 
 To initialise the full memoryengine submodule:
@@ -166,6 +170,15 @@ Thresholds are configurable in `config.yaml` under `gpu_monitor:`.
 ## Skill System
 
 Agents can install skills from [anthropics/skills](https://github.com/anthropics/skills) via sparse clone. Installed skills are logged to `skills/agents/{agent_id}/installed.json`.
+
+**Multi-source support** — In addition to the remote registry, agents can access skills from local directories. Local directories are searched first, then the registry. Configure in `config.yaml`:
+
+```yaml
+skills:
+  repo: https://github.com/anthropics/skills.git
+  local_dirs:
+    - ../claude-scientific-skills/scientific-skills
+```
 
 Allowlisted skills (configurable in `config.yaml`):
 - `doc-coauthoring`
