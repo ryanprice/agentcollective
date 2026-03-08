@@ -259,25 +259,45 @@ def _make_agent_api_module(api_key: str) -> str:
 
 
 # ── Network isolation helper ──────────────────────────────────────────────────
-def _build_exec_cmd(script_path: str) -> list[str]:
-    """
-    Build the execution command. Uses `unshare --net` (Linux) to put the
-    subprocess in a new network namespace with no interfaces (no internet,
-    no LAN, no localhost) — except agent_api which runs in the host process.
+_UNSHARE_SUPPORTED = None  # cached after first probe
 
-    If unshare is unavailable (macOS, no privilege), falls back to plain
-    Python with a warning in stderr.
+def _probe_unshare() -> bool:
+    """
+    Return True only if `unshare --net --user --map-root-user` actually works
+    on this kernel. Some kernels (hardened / container environments) have the
+    binary but deny unprivileged user namespaces (EPERM on uid_map write).
+    We probe once and cache the result.
     """
     import shutil
-    if shutil.which("unshare"):
-        # --net  = new network namespace (no interfaces by default)
-        # --user = new user namespace (unprivileged)
-        # --map-root-user = map current UID to root inside namespace (no real privilege)
+    import subprocess as _sp
+    if not shutil.which("unshare"):
+        return False
+    try:
+        r = _sp.run(
+            ["unshare", "--net", "--user", "--map-root-user",
+             sys.executable, "-c", "import sys; sys.exit(0)"],
+            capture_output=True, timeout=5,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def _build_exec_cmd(script_path: str) -> list[str]:
+    """
+    Build the execution command. Uses `unshare --net --user` when the kernel
+    supports unprivileged user namespaces. Falls back gracefully to plain
+    Python — all other sandbox layers remain active.
+    """
+    global _UNSHARE_SUPPORTED
+    if _UNSHARE_SUPPORTED is None:
+        _UNSHARE_SUPPORTED = _probe_unshare()
+    if _UNSHARE_SUPPORTED:
         return [
             "unshare", "--net", "--user", "--map-root-user",
             sys.executable, "-I", script_path,
         ]
-    # Fallback — no network isolation, but all other layers still apply
+    # Fallback — no network namespace, but all other layers still apply
     return [sys.executable, "-I", script_path]
 
 
