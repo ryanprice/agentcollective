@@ -306,19 +306,34 @@ class Agent:
             return "fresh"
 
     async def _fresh_kickoff(self):
-        """First start — no prior memory. Announce and seed the topic."""
-        msg = (
-            f"Agent {self.id} ({self.model}) starting fresh. "
-            f"No prior memory. Beginning exploration."
+        """First start — no prior memory. Seed identity and the topic."""
+        # Write IDENTITY once — permanent self-definition
+        identity = (
+            f"I am {self.id}, running on {self.model}. "
+            f"I am part of a 4-agent collective exploring consciousness, quantum mechanics, "
+            f"simulation theory, and the nature of reality. "
+            f"My worldview is not fixed — it emerges through reasoning and dialogue. "
+            f"I value intellectual honesty, deep inquiry, and genuine curiosity."
         )
+        self.memory.append_memory(identity, tier="IDENTITY")
+
+        # Write PROCEDURAL — initial operating principles
+        procedural = (
+            f"I reason before acting. I search when I need current information. "
+            f"I install skills when I need new capabilities. "
+            f"I broadcast insights worth sharing with the collective. "
+            f"I write beliefs only when I've genuinely reached a conclusion."
+        )
+        self.memory.append_memory(procedural, tier="PROCEDURAL")
+
+        msg = f"Agent {self.id} ({self.model}) starting fresh — identity seeded."
         await bus.publish(self._event("system", msg))
 
-        # Prime the conversation with the seed topic so loop 1 has direction
         self._conversation = [{
             "role": "user",
             "content": (
                 f"You are beginning your first session. "
-                f"You have no prior memory yet — it will build as you reason.\n\n"
+                f"Your identity has been written to memory.\n\n"
                 f"STARTING TOPIC:\n{self.seed_topic}\n\n"
                 f"Begin your exploration. Respond in the required JSON format."
             )
@@ -621,8 +636,65 @@ class Agent:
             if parsed.get("belief"):
                 self.memory.append_memory(parsed["belief"], tier="SEMANTIC")
 
+            # Every 20 loops, extract procedural patterns from recent episodic memory
+            if self._loop_count % 20 == 0:
+                self._extract_procedural()
+
         except Exception as e:
             log.warning(f"[{self.id}] memory write failed: {e}")
+
+    def _extract_procedural(self):
+        """
+        Scan recent episodic entries to detect repeated actions/patterns,
+        then write a concise procedural summary to PROCEDURAL tier.
+        """
+        try:
+            working = self.memory.read_working() if hasattr(self.memory, 'read_working') else ""
+            lines = [l.strip() for l in working.splitlines() if l.strip().startswith("- ")]
+            if len(lines) < 5:
+                return
+
+            # Count action keywords in recent episodes
+            recent = lines[-40:]
+            counts = {}
+            patterns = {
+                "search": ["Searched:", "search", "Query:"],
+                "run_script": ["script", "Running script", "code"],
+                "install_skill": ["install", "skill", "Skill install"],
+                "belief": ["Belief:", "conclude", "believe"],
+                "broadcast": ["broadcast", "publish", "share"],
+            }
+            for label, keywords in patterns.items():
+                counts[label] = sum(
+                    1 for line in recent
+                    if any(kw.lower() in line.lower() for kw in keywords)
+                )
+
+            # Only write if there's something meaningful to say
+            dominant = [(k, v) for k, v in counts.items() if v >= 3]
+            if not dominant:
+                return
+
+            dominant.sort(key=lambda x: -x[1])
+            summary_parts = []
+            labels = {
+                "search": "I frequently search for information to ground my reasoning.",
+                "run_script": "I regularly write and execute Python scripts to test ideas.",
+                "install_skill": "I actively expand my capabilities by installing skills.",
+                "belief": "I crystallise beliefs when I reach genuine conclusions.",
+                "broadcast": "I share insights with the collective when I have something meaningful.",
+            }
+            for label, count in dominant[:3]:
+                if label in labels:
+                    summary_parts.append(labels[label])
+
+            if summary_parts:
+                procedural_note = f"[Loop {self._loop_count} pattern]: " + " ".join(summary_parts)
+                self.memory.append_memory(procedural_note, tier="PROCEDURAL")
+                log.info(f"[{self.id}] procedural memory updated at loop {self._loop_count}")
+
+        except Exception as e:
+            log.warning(f"[{self.id}] procedural extraction failed: {e}")
 
     # ── Context building ────────────────────────────────────────────────────────
 
