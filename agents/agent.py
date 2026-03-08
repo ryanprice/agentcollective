@@ -292,11 +292,13 @@ class Agent:
         'fresh' if memory files are empty/template-only.
         """
         try:
+            # Use memoryengine's proper API if available
+            if hasattr(self.memory, 'is_initialized'):
+                return "resume" if self.memory.is_initialized() else "fresh"
+            # Fallback: strip template headers and check if anything meaningful remains
             core = self.memory.read_core()
             working = self.memory.read_working() if hasattr(self.memory, 'read_working') else ""
-            combined = core + working
-            # Strip template headers — if anything meaningful remains, we're resuming
-            stripped = combined
+            stripped = core + working
             for header in ["# Core Memory", "# Working Memory",
                            "## [IDENTITY]", "## [PROCEDURAL]", "## [SEMANTIC]",
                            "## [EPISODIC]", "## [EPHEMERAL]"]:
@@ -307,7 +309,6 @@ class Agent:
 
     async def _fresh_kickoff(self):
         """First start — no prior memory. Seed identity and the topic."""
-        # Write IDENTITY once — permanent self-definition
         identity = (
             f"I am {self.id}, running on {self.model}. "
             f"I am part of a 4-agent collective exploring consciousness, quantum mechanics, "
@@ -315,16 +316,19 @@ class Agent:
             f"My worldview is not fixed — it emerges through reasoning and dialogue. "
             f"I value intellectual honesty, deep inquiry, and genuine curiosity."
         )
-        self.memory.append_memory(identity, tier="IDENTITY")
-
-        # Write PROCEDURAL — initial operating principles
         procedural = (
             f"I reason before acting. I search when I need current information. "
             f"I install skills when I need new capabilities. "
             f"I broadcast insights worth sharing with the collective. "
             f"I write beliefs only when I've genuinely reached a conclusion."
         )
-        self.memory.append_memory(procedural, tier="PROCEDURAL")
+
+        # Use init_identity if available (memoryengine), else fall back to append_memory
+        if hasattr(self.memory, 'init_identity'):
+            self.memory.init_identity(identity=identity, procedural=procedural)
+        else:
+            self.memory.append_memory(identity, tier="IDENTITY")
+            self.memory.append_memory(procedural, tier="PROCEDURAL")
 
         msg = f"Agent {self.id} ({self.model}) starting fresh — identity seeded."
         await bus.publish(self._event("system", msg))
