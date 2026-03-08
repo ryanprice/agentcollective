@@ -448,9 +448,15 @@ function ToolLog({ events }) {
                         {obs.result.raw.results.length} results
                       </span>
                     )}
+                    {obs.result?.type === "run_script" && (
+                      <span style={{ color: obs.result?.raw?.ok ? "#4ade80" : "#f87171", marginLeft:8, fontWeight:700, fontSize:9 }}>
+                        {obs.result?.raw?.ok ? "EXIT 0" : `EXIT ${obs.result?.raw?.exit_code ?? "?"}`}
+                      </span>
+                    )}
                   </div>
                   <div style={{ background:"var(--bg2)", border:"1px solid var(--border)", borderRadius:6, padding:12, overflow:"auto", flex:1 }}>
-                    {/* Search results list */}
+
+                    {/* Search results */}
                     {obs.result?.raw?.results?.length > 0 ? (
                       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                         {obs.result.raw.results.map((r, ri) => (
@@ -464,6 +470,47 @@ function ToolLog({ events }) {
                           </div>
                         ))}
                       </div>
+
+                    /* Script stdout/stderr */
+                    ) : obs.result?.type === "run_script" ? (
+                      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                        {obs.result?.raw?.stdout && (
+                          <div>
+                            <div style={{ fontSize:9, color:"#4ade80", fontWeight:700, marginBottom:4, letterSpacing:1 }}>STDOUT</div>
+                            <pre style={{ fontSize:11, color:"#e2e8f0", margin:0, whiteSpace:"pre-wrap", wordBreak:"break-word", lineHeight:1.6 }}>
+                              {obs.result.raw.stdout}
+                            </pre>
+                          </div>
+                        )}
+                        {obs.result?.raw?.stderr && (
+                          <div>
+                            <div style={{ fontSize:9, color:"#f87171", fontWeight:700, marginBottom:4, letterSpacing:1 }}>STDERR</div>
+                            <pre style={{ fontSize:11, color:"#fca5a5", margin:0, whiteSpace:"pre-wrap", wordBreak:"break-word", lineHeight:1.6 }}>
+                              {obs.result.raw.stderr}
+                            </pre>
+                          </div>
+                        )}
+                        {obs.result?.raw?.violations?.length > 0 && (
+                          <div style={{ background:"#450a0a", border:"1px solid #7f1d1d", borderRadius:6, padding:10 }}>
+                            <div style={{ fontSize:9, color:"#f87171", fontWeight:700, marginBottom:4, letterSpacing:1 }}>SANDBOX BLOCKED</div>
+                            {obs.result.raw.violations.map((v,i) => (
+                              <div key={i} style={{ fontSize:11, color:"#fca5a5" }}>⛔ {v}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                    /* Skill instructions */
+                    ) : obs.result?.type === "run_skill" ? (
+                      <div>
+                        <div style={{ fontSize:9, color:"#e879f9", fontWeight:700, marginBottom:6, letterSpacing:1 }}>
+                          SKILL: {obs.result?.raw?.skill || obs.result?.skill || ""}
+                        </div>
+                        <pre style={{ fontSize:10, color:"#94a3b8", margin:0, whiteSpace:"pre-wrap", wordBreak:"break-word", lineHeight:1.7 }}>
+                          {obs.result?.raw?.instructions_preview || obs.thought || "No preview available"}
+                        </pre>
+                      </div>
+
                     ) : (
                       <div style={{ color:"#94a3b8", fontSize:11, lineHeight:1.7, whiteSpace:"pre-wrap" }}>
                         {obs.thought || obs.result?.summary || "No observation data"}

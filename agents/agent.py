@@ -420,20 +420,50 @@ class Agent:
 
         elif atype == "run_skill":
             skill_md = self.skills.read_skill(skill)
-            if skill_md:
-                return {
-                    "type":    "run_skill",
-                    "skill":   skill,
-                    "summary": f"Skill instructions loaded: {skill_md[:400]}",
-                }
-            return {"type": "run_skill", "skill": skill, "summary": "Skill not installed."}
+            if not skill_md:
+                return {"type": "run_skill", "skill": skill, "summary": "Skill not installed — use install_skill first."}
+
+            # Frame the skill as an execution directive so the agent acts on it
+            # rather than just reading it passively
+            await bus.publish(self._event(
+                "act", f"Running skill: {skill}",
+                extra={"action": {"type": "run_skill", "skill": skill}}
+            ))
+            return {
+                "type":    "run_skill",
+                "skill":   skill,
+                "summary": (
+                    f"SKILL LOADED: {skill}\n"
+                    f"Read the instructions below and execute them now using run_script or search actions.\n"
+                    f"Produce a concrete output — don't just describe what you'd do.\n\n"
+                    f"{skill_md[:1200]}"
+                ),
+                "raw": {"skill": skill, "instructions_preview": skill_md[:400]},
+            }
 
         elif atype == "run_script":
-            await bus.publish(self._event("act", f"Running script ({len(code)} chars)", extra={"action": {"type": "run_script", "code": code[:80]}}))
+            await bus.publish(self._event(
+                "act", f"Running script ({len(code)} chars)",
+                extra={"action": {"type": "run_script", "code": code}}  # full code now
+            ))
             result = await run_script(code)
+            output = (result["stdout"] or result["stderr"] or "No output")[:800]
+            # Publish script output to the bus so other agents see it
+            await bus.publish(self._event(
+                "observe",
+                f"Script result: {output[:200]}",
+                extra={
+                    "action": {"type": "run_script", "code": code},
+                    "result": {
+                        "type":    "run_script",
+                        "summary": output,
+                        "raw":     result,
+                    }
+                }
+            ))
             return {
                 "type":    "run_script",
-                "summary": (result["stdout"] or result["stderr"])[:800],
+                "summary": output,
                 "raw":     result,
             }
 
