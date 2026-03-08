@@ -8,7 +8,8 @@ __pycache__/
 .venv/
 venv/
 
-# Memory runtime files (working + archives)
+# Memory runtime files (all agent memory is local state, never committed)
+memory/*/core.md
 memory/*/working.md
 memory/*/archive/
 skills/registry/
