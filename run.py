@@ -4,7 +4,8 @@ Agent Collective — Main Entry Point
 ------------------------------------
 Usage:
   python run.py                  # start everything
-  python run.py --snapshot       # auto-commit memory to git on Ctrl+C
+  python run.py               # runs with snapshot on by default
+  python run.py --no-snapshot  # disable memory commit on exit
   python run.py --agents qwen,llama
   python run.py --no-api
 """
@@ -38,7 +39,7 @@ def load_config(path: str = "config.yaml") -> dict:
         return yaml.safe_load(f)
 
 
-async def main(config: dict, agent_filter=None, run_api=True, snapshot=False):
+async def main(config: dict, agent_filter=None, run_api=True, snapshot=True):
     agent_configs = config.get("agents", [])
     if agent_filter:
         agent_configs = [a for a in agent_configs if a["id"] in agent_filter]
@@ -152,7 +153,8 @@ if __name__ == "__main__":
     parser.add_argument("--config",   default="config.yaml")
     parser.add_argument("--agents",   default=None)
     parser.add_argument("--no-api",   action="store_true")
-    parser.add_argument("--snapshot", action="store_true")
+    parser.add_argument("--snapshot", action="store_true", default=True)
+    parser.add_argument("--no-snapshot", action="store_false", dest="snapshot", help="Disable memory snapshot on exit")
     args = parser.parse_args()
 
     config       = load_config(args.config)
