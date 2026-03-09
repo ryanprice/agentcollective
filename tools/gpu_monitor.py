@@ -235,15 +235,20 @@ class GPUMonitor:
             "publish":  msg,
         })
 
-        if new_level == SafeLevel.WARM:
-            await self._apply_throttle()
+        # ── Escalation ────────────────────────────────────────
+        if new_level == SafeLevel.CRITICAL:
+            await self._pause_all()
+            await self._stop_heaviest()
 
         elif new_level == SafeLevel.HOT:
             await self._pause_all()
 
-        elif new_level == SafeLevel.CRITICAL:
-            await self._pause_all()
-            await self._stop_heaviest()
+        # ── De-escalation ─────────────────────────────────────
+        elif new_level == SafeLevel.WARM:
+            # Unpause agents that were paused at HOT/CRITICAL
+            # Restart stopped agents — throttled delays will keep load manageable
+            await self._resume_all()
+            await self._apply_throttle()
 
         elif new_level == SafeLevel.NORMAL:
             await self._resume_all()
@@ -287,22 +292,36 @@ class GPUMonitor:
         log.warning(f"Stopped heaviest agent: {heaviest.id} ({heaviest.model})")
 
     async def _resume_all(self):
-        """Resume paused agents and restore normal delays."""
+        """Resume paused agents, restart stopped agents, and restore normal delays."""
         for agent_id, agent in self.agents.items():
             if getattr(agent, "_paused", False):
                 agent._paused = False
                 self._paused_agents.discard(agent_id)
+
+        # Restart agents that were hard-stopped at CRITICAL level
+        if self._stopped_agents:
+            for agent_id in list(self._stopped_agents):
+                agent = self.agents.get(agent_id)
+                if agent:
+                    log.info(f"Restarting stopped agent: {agent_id} ({agent.model})")
+                    asyncio.create_task(agent.run(), name=f"agent-{agent_id}")
+            restarted = list(self._stopped_agents)
+            self._stopped_agents.clear()
+            await bus.publish({
+                "agent_id": "gpu_monitor",
+                "model":    "system",
+                "color":    self._level_color(SafeLevel.NORMAL),
+                "phase":    "system",
+                "thought":  f"Restarted previously stopped agents: {restarted}",
+                "concepts": ["gpu", "safeguard", "recovery"],
+                "publish":  f"GPU temps normal — restarting {', '.join(restarted)}",
+            })
 
         # Restore normal delays
         for agent in self.agents.values():
             agent.loop_config["min_delay_seconds"] = 3
             agent.loop_config["max_delay_seconds"] = 8
 
-        if self._stopped_agents:
-            log.info(
-                f"Note: {self._stopped_agents} were hard-stopped at CRITICAL level "
-                "and need manual restart via /start/{agent_id}"
-            )
         log.info("Agents resumed, delays restored to normal.")
 
     # ── Helpers ───────────────────────────────────────────────────────────────
