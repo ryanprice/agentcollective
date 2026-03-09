@@ -162,6 +162,68 @@
   .modal-about-btn { background: none; border: 1px solid #2a2a3a; color: #64748b; padding: 3px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 10px; font-weight: 600; letter-spacing: 1px; transition: all .15s; }
   .modal-about-btn:hover { color: #a78bfa; border-color: #a78bfa44; }
   .modal hr { border: none; border-top: 1px solid #1e1e2e; margin: 22px 0; }
+
+  /* ── OBSERVER VIEW ────────────────────────────────────────────── */
+  .observer { flex: 1; overflow-y: auto; padding: 24px; max-width: 1400px; margin: 0 auto; width: 100%; }
+  .observer::-webkit-scrollbar { width: 6px; }
+  .observer::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 3px; }
+
+  .obs-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px; position: relative; margin-bottom: 20px; }
+  .obs-label { position: absolute; top: -9px; left: 16px; background: var(--bg2); padding: 0 8px; font-size: 10px; letter-spacing: 0.15em; font-weight: 600; }
+  .obs-label-accent { color: #6366f1; }
+  .obs-label-muted { color: var(--muted); }
+
+  .obs-synthesis { font-family: 'Inter', 'Helvetica Neue', system-ui, sans-serif; font-size: 14px; line-height: 1.7; max-width: 900px; color: var(--text); }
+  .obs-synthesis strong { color: #fbbf24; }
+  .obs-update { margin-top: 10px; font-size: 11px; color: #4a4e69; }
+
+  .obs-phase-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.25); margin-left: 12px; }
+  .obs-phase-dot { width: 6px; height: 6px; border-radius: 50%; background: #fbbf24; animation: obsPulse 2s ease-in-out infinite; }
+  @keyframes obsPulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+
+  .obs-matrix { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .obs-matrix th { text-align: left; padding: 8px 10px; font-weight: 500; color: var(--muted); font-size: 11px; border-bottom: 1px solid var(--border); }
+  .obs-matrix th.ac { text-align: center; width: 20%; }
+  .obs-matrix td { padding: 10px; border-bottom: 1px solid #1a1a28; vertical-align: top; }
+  .obs-matrix td.q { font-weight: 500; width: 20%; font-family: 'Inter','Helvetica Neue',system-ui,sans-serif; font-size: 12px; }
+  .obs-matrix td.s { text-align: center; font-size: 11px; }
+
+  .stance-chip { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 500; }
+  .stance-strong   { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+  .stance-moderate  { background: rgba(107,114,128,0.2); color: #9ca3af; }
+  .stance-opposed   { background: rgba(239,68,68,0.12); color: #fca5a5; }
+  .stance-open      { background: rgba(16,185,129,0.12); color: #6ee7b7; }
+  .stance-evolving  { background: rgba(245,158,11,0.12); color: #fcd34d; }
+  .stance-detail    { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  .obs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+
+  .tension-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid #1a1a28; align-items: flex-start; }
+  .tension-item:last-child { border-bottom: none; }
+  .tension-heat { width: 4px; min-height: 40px; border-radius: 2px; flex-shrink: 0; }
+  .heat-high { background: #EF4444; }
+  .heat-med { background: #F59E0B; }
+  .heat-low { background: #6B7280; }
+  .tension-pair { font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+  .tension-desc { font-family: 'Inter','Helvetica Neue',system-ui,sans-serif; font-size: 12px; color: var(--text); line-height: 1.5; }
+
+  .timeline-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #1a1a28; align-items: flex-start; }
+  .timeline-item:last-child { border-bottom: none; }
+  .timeline-time { font-size: 10px; color: var(--muted); white-space: nowrap; min-width: 52px; padding-top: 2px; }
+  .timeline-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .timeline-desc { font-family: 'Inter','Helvetica Neue',system-ui,sans-serif; font-size: 12px; color: var(--text); line-height: 1.5; }
+  .timeline-tag { font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 3px; margin-right: 4px; }
+
+  .obs-phase-bar { height: 6px; border-radius: 3px; overflow: hidden; background: #1a1a28; margin: 12px 0 8px; display: flex; }
+  .obs-phase-seg { transition: width .5s ease; }
+  .obs-phase-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); }
+  .obs-phase-current { font-size: 11px; color: #fbbf24; margin-top: 4px; text-align: center; }
+
+  .obs-unresolved { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .oq-item { background: #1a1a28; border-radius: 6px; padding: 12px; font-family: 'Inter','Helvetica Neue',system-ui,sans-serif; font-size: 12px; color: var(--text); line-height: 1.5; border-left: 3px solid #6366f1; }
+  .oq-status { font-size: 10px; color: var(--muted); margin-top: 6px; }
+
+  .obs-loading { text-align: center; padding: 60px; color: var(--muted); font-size: 13px; }
 </style>
 
 <body>
@@ -1271,6 +1333,192 @@ function AboutModal({ onClose }) {
   );
 }
 
+// ── Observer View ──────────────────────────────────────────────────────────────
+
+function ObserverView() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch("/observer");
+      if (!res.ok) throw new Error("Failed to fetch observer data");
+      setData(await res.json());
+      setError(null);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 15000); // refresh every 15s
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  if (loading) return <div className="obs-loading">Loading observer data...</div>;
+  if (error) return <div className="obs-loading">Error: {error}</div>;
+  if (!data) return <div className="obs-loading">No data available</div>;
+
+  const phaseMap = {
+    "initialising": 5,
+    "staking positions": 20,
+    "active debate": 50,
+    "testing claims": 75,
+    "convergence": 95,
+  };
+  const phasePct = phaseMap[data.phase] || 30;
+
+  return (
+    <div className="observer">
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 20 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#64748b" }}>
+          Observer View
+          <span className="obs-phase-badge">
+            <span className="obs-phase-dot"></span>
+            {data.phase}
+          </span>
+        </div>
+        <div style={{ fontSize: 11, color: "#4a4e69" }}>
+          Loop {data.loop} · {data.agent_count} agents · {data.event_count} events
+        </div>
+      </div>
+
+      {/* Synthesis */}
+      <div className="obs-panel">
+        <span className="obs-label obs-label-accent">SYNTHESIS</span>
+        <div className="obs-synthesis">
+          {data.synthesis
+            ? <span dangerouslySetInnerHTML={{ __html: data.synthesis }} />
+            : <span style={{ color: "#64748b", fontStyle: "italic" }}>
+                The collective is in <strong>{data.phase}</strong> phase.
+                {" "}{data.event_count < 20
+                  ? "Too few events for meaningful synthesis — agents are still warming up."
+                  : "Algorithmic data is available below. Natural language synthesis will be generated after more discourse."}
+              </span>
+          }
+        </div>
+        <div className="obs-update">Updated {new Date(data.timestamp).toLocaleTimeString()}</div>
+      </div>
+
+      {/* Position Matrix */}
+      {data.position_matrix && data.position_matrix.length > 0 && (
+        <div className="obs-panel">
+          <span className="obs-label obs-label-muted">POSITION MATRIX</span>
+          <table className="obs-matrix">
+            <thead>
+              <tr>
+                <th>Question</th>
+                {Object.keys(data.identities || {}).map(aid => (
+                  <th key={aid} className="ac">
+                    <span style={{ fontWeight: 700, color: data.identities[aid]?.color || "#888" }}>{aid}</span>
+                    <br/>
+                    <span style={{ fontSize: 9, color: "#4a4e69" }}>{data.identities[aid]?.posture || ""}</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.position_matrix.map((row, i) => (
+                <tr key={i}>
+                  <td className="q">{row.question}</td>
+                  {Object.keys(data.identities || {}).map(aid => {
+                    const s = row.stances?.[aid] || {};
+                    return (
+                      <td key={aid} className="s">
+                        <span className={`stance-chip stance-${s.style || "moderate"}`}>{s.stance || "—"}</span>
+                        <div className="stance-detail">{s.detail || ""}</div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Tensions + Key Moments */}
+      <div className="obs-grid">
+        <div className="obs-panel">
+          <span className="obs-label obs-label-muted">ACTIVE TENSIONS</span>
+          {(!data.tensions || data.tensions.length === 0) ? (
+            <div style={{ color: "#4a4e69", fontSize: 12, padding: 10 }}>No strong disagreements detected yet.</div>
+          ) : data.tensions.map((t, i) => (
+            <div key={i} className="tension-item">
+              <div className={`tension-heat heat-${t.heat === "high" ? "high" : t.heat === "medium" ? "med" : "low"}`}></div>
+              <div>
+                <div className="tension-pair">
+                  <span style={{ fontWeight: 700, color: AGENT_COLORS[t.agents[0]] || "#888" }}>{t.agents[0]}</span>
+                  {" vs "}
+                  <span style={{ fontWeight: 700, color: AGENT_COLORS[t.agents[1]] || "#888" }}>{t.agents[1]}</span>
+                </div>
+                <div className="tension-desc">{t.context || "Disagreement detected from sentiment signals."}</div>
+              </div>
+            </div>
+          ))}
+
+          {/* Discourse Phase gauge */}
+          <div style={{ marginTop: 24, textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: "#4a4e69", letterSpacing: "0.1em" }}>DISCOURSE PHASE</div>
+            <div className="obs-phase-bar">
+              <div className="obs-phase-seg" style={{ width: `${phasePct}%`, background: phasePct < 30 ? "#6B7280" : phasePct < 60 ? "#F59E0B" : "#10B981" }}></div>
+            </div>
+            <div className="obs-phase-labels">
+              <span>Staking positions</span>
+              <span>Active debate</span>
+              <span>Testing claims</span>
+              <span>Convergence</span>
+            </div>
+            <div className="obs-phase-current">Currently: {data.phase}</div>
+          </div>
+        </div>
+
+        <div className="obs-panel">
+          <span className="obs-label obs-label-muted">KEY MOMENTS</span>
+          {(!data.key_moments || data.key_moments.length === 0) ? (
+            <div style={{ color: "#4a4e69", fontSize: 12, padding: 10 }}>No significant moments yet.</div>
+          ) : data.key_moments.slice(-10).reverse().map((m, i) => (
+            <div key={i} className="timeline-item">
+              <div className="timeline-time">Loop {m.loop || "?"}</div>
+              <div className="timeline-dot" style={{ background: AGENT_COLORS[m.agent] || "#6B7280" }}></div>
+              <div className="timeline-desc">
+                <span className="timeline-tag" style={{
+                  background: (AGENT_COLORS[m.agent] || "#888") + "33",
+                  color: AGENT_COLORS[m.agent] || "#888",
+                }}>{m.agent}</span>
+                {m.text}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Unresolved Questions */}
+      {data.unresolved && data.unresolved.length > 0 && (
+        <div className="obs-panel">
+          <span className="obs-label obs-label-muted">UNRESOLVED QUESTIONS</span>
+          <div className="obs-unresolved">
+            {data.unresolved.map((q, i) => (
+              <div key={i} className="oq-item">
+                {q.question}
+                <div className="oq-status">
+                  Raised by <span style={{ color: AGENT_COLORS[q.raised_by] || "#888", fontWeight: 600 }}>{q.raised_by}</span>
+                  {q.loop ? ` at loop ${q.loop}` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function App() {
   const wsProto = window.location.protocol === "https:" ? "wss" : "ws";
   const wsUrl = `${wsProto}://${window.location.host}/ws`;
@@ -1278,7 +1526,7 @@ function App() {
   const status = useStatus();
   const graph  = useGraph();
 
-  const TABS = ["streams", "bus", "tools", "map", "memory", "gpu", "tokens"];
+  const TABS = ["streams", "bus", "tools", "map", "memory", "gpu", "tokens", "observer"];
 
   const getRouteState = () => {
     const path = window.location.pathname.replace(/^\//, "") || "streams";
@@ -1358,9 +1606,9 @@ function App() {
 
       {/* Tabs */}
       <div className="tabs">
-        {["streams", "bus", "tools", "map", "memory", "gpu", "tokens"].map(t => (
+        {["streams", "bus", "tools", "map", "memory", "gpu", "tokens", "observer"].map(t => (
           <div key={t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => navigate(t)}>
-            {t === "streams" ? "🧠 Streams" : t === "bus" ? "📡 Bus" : t === "tools" ? "🔧 Tools" : t === "map" ? "🗺 Map" : t === "memory" ? "💾 Memory" : t === "gpu" ? "🌡 GPU" : "📊 Tokens"}
+            {t === "streams" ? "🧠 Streams" : t === "bus" ? "📡 Bus" : t === "tools" ? "🔧 Tools" : t === "map" ? "🗺 Map" : t === "memory" ? "💾 Memory" : t === "gpu" ? "🌡 GPU" : t === "tokens" ? "📊 Tokens" : "👁 Observer"}
           </div>
         ))}
       </div>
@@ -1401,6 +1649,7 @@ function App() {
         )}
         {tab === "gpu" && <GPUPanel />}
         {tab === "tokens" && <TokensPanel status={status} />}
+        {tab === "observer" && <ObserverView />}
       </div>
     </div>
   );

@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from bus.broker import bus
 from api.graph import concept_graph
+from api.observer import build_observer_data, load_latest, save_snapshot, list_snapshots
 
 
 app = FastAPI(title="Agent Collective", version="1.0")
@@ -262,8 +263,37 @@ async def mobile_view():
     from fastapi import HTTPException
     raise HTTPException(404, "Mobile view not found")
 
+# ── Observer ──────────────────────────────────────────────────────────────────
+
+@app.get("/observer")
+async def get_observer():
+    """Live observer snapshot — built algorithmically from current state."""
+    snapshot = build_observer_data(_agents, bus.recent(n=500))
+    return snapshot
+
+@app.post("/observer/snapshot")
+async def take_snapshot():
+    """Save a versioned observer snapshot to disk."""
+    snapshot = build_observer_data(_agents, bus.recent(n=500))
+    path = save_snapshot(snapshot)
+    return {"ok": True, "path": path}
+
+@app.get("/observer/history")
+async def observer_history(limit: int = 50):
+    """List saved observer snapshots."""
+    return {"snapshots": list_snapshots(limit)}
+
+@app.get("/observer/latest")
+async def observer_latest():
+    """Load the most recent saved snapshot."""
+    snap = load_latest()
+    if not snap:
+        return {"status": "no_snapshots"}
+    return snap
+
+
 # SPA catch-all — MUST be last so it doesn't shadow API routes
-_SPA_ROUTES = {"streams", "bus", "tools", "map", "memory", "gpu", "tokens", "about"}
+_SPA_ROUTES = {"streams", "bus", "tools", "map", "memory", "gpu", "tokens", "observer", "about"}
 
 @app.get("/{route}")
 async def spa_route(route: str):
