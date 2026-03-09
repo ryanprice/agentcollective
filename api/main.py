@@ -265,25 +265,25 @@ async def mobile_view():
 
 # ── Observer ──────────────────────────────────────────────────────────────────
 
-@app.get("/observer")
+@app.get("/api/observer")
 async def get_observer():
     """Live observer snapshot — built algorithmically from current state."""
     snapshot = build_observer_data(_agents, bus.recent(n=500))
     return snapshot
 
-@app.post("/observer/snapshot")
+@app.post("/api/observer/snapshot")
 async def take_snapshot():
     """Save a versioned observer snapshot to disk."""
     snapshot = build_observer_data(_agents, bus.recent(n=500))
     path = save_snapshot(snapshot)
     return {"ok": True, "path": path}
 
-@app.get("/observer/history")
+@app.get("/api/observer/history")
 async def observer_history(limit: int = 50):
     """List saved observer snapshots."""
     return {"snapshots": list_snapshots(limit)}
 
-@app.get("/observer/latest")
+@app.get("/api/observer/latest")
 async def observer_latest():
     """Load the most recent saved snapshot."""
     snap = load_latest()

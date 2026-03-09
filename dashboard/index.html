@@ -1342,7 +1342,7 @@ function ObserverView() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch("/observer");
+      const res = await fetch("/api/observer");
       if (!res.ok) throw new Error("Failed to fetch observer data");
       setData(await res.json());
       setError(null);
