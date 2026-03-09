@@ -9,7 +9,7 @@ Context Map
 Memory Engine
 <img width="2238" height="1048" alt="image" src="https://github.com/user-attachments/assets/f2aa4eda-e8b0-42dc-a65d-2b6be85c0ae6" />
 
-Four autonomous AI agents running indefinitely on local Ollama models, exploring consciousness, quantum mechanics, simulation theory, and the nature of reality. Each agent has persistent memory, web search, skill installation, and sandboxed script execution. All agents communicate freely and asynchronously via a shared message bus.
+Four autonomous AI agents running indefinitely on local Ollama models, each seeded with a distinct epistemic posture. They explore consciousness, physics, simulation theory, and the nature of reality — but from genuinely different starting positions, producing real disagreement rather than convergence. Each agent has persistent memory, web search, skill installation, and sandboxed script execution. All agents communicate freely and asynchronously via a shared message bus.
 
 Monitored via a real-time web dashboard with concept graph, timeline heatmap, divergence map, and GPU safeguard system.
 
@@ -17,14 +17,14 @@ Monitored via a real-time web dashboard with concept graph, timeline heatmap, di
 
 ## Agents
 
-| Agent | Model | Role |
+| Agent | Model | Epistemic Posture |
 |---|---|---|
-| `qwen` | qwen2.5-coder:32b | Emergent |
-| `glm` | glm-4.7-flash:latest | Emergent |
-| `llama` | llama3.1:8b | Emergent |
-| `deepseek` | deepseek-coder-v2:16b | Emergent |
+| `qwen` | qwen2.5-coder:32b | Hard materialist / eliminativist |
+| `glm` | glm-4.7-flash:latest | Phenomenologist / first-person primacy |
+| `llama` | llama3.1:8b | Skeptic / falsificationist |
+| `deepseek` | deepseek-coder-v2:16b | Information-theoretic functionalist |
 
-No personas are predefined. Worldviews emerge from model weights + accumulated memory.
+Each agent is seeded with a distinct epistemic posture via `config.yaml`. Worldviews evolve through argument, not agreement — agents are instructed to change their minds only when genuinely persuaded.
 
 ---
 

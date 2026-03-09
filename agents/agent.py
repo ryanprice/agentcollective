@@ -261,6 +261,8 @@ class Agent:
 
         self.loop_config   = global_config.get("loop", {})
         self.seed_topic    = global_config.get("seed_topic", "Explore consciousness freely.")
+        self.posture       = config.get("posture", "")
+        self._config_identity = config.get("identity", "")
 
         self._consecutive_failures = 0
 
@@ -363,13 +365,16 @@ class Agent:
 
     async def _fresh_kickoff(self):
         """First start — no prior memory. Seed identity and the topic."""
-        identity = (
-            f"I am {self.id}, running on {self.model}. "
-            f"I am part of a 4-agent collective exploring consciousness, quantum mechanics, "
-            f"simulation theory, and the nature of reality. "
-            f"My worldview is not fixed — it emerges through reasoning and dialogue. "
-            f"I value intellectual honesty, deep inquiry, and genuine curiosity."
-        )
+        # Use per-agent identity from config if available, else fall back to generic
+        if self._config_identity:
+            identity = self._config_identity
+        else:
+            identity = (
+                f"I am {self.id}, running on {self.model}. "
+                f"I am part of a 4-agent collective. "
+                f"My worldview is not fixed — it emerges through reasoning and dialogue. "
+                f"I value intellectual honesty, deep inquiry, and genuine curiosity."
+            )
         procedural = (
             f"I reason before acting. I search when I need current information. "
             f"I install skills when I need new capabilities. "
@@ -483,13 +488,15 @@ class Agent:
                     break
 
         if identity_idx is not None and not has_entry:
-            identity = (
-                f"I am {self.id}, running on {self.model}. "
-                f"I am part of a 4-agent collective exploring consciousness, quantum mechanics, "
-                f"simulation theory, and the nature of reality. "
-                f"My worldview is not fixed — it emerges through reasoning and dialogue. "
-                f"I value intellectual honesty, deep inquiry, and genuine curiosity."
-            )
+            if self._config_identity:
+                identity = self._config_identity
+            else:
+                identity = (
+                    f"I am {self.id}, running on {self.model}. "
+                    f"I am part of a 4-agent collective. "
+                    f"My worldview is not fixed — it emerges through reasoning and dialogue. "
+                    f"I value intellectual honesty, deep inquiry, and genuine curiosity."
+                )
             self.memory.append_memory(identity, tier="IDENTITY")
             log.info(f"[{self.id}] Backfilled empty IDENTITY section")
 
@@ -903,13 +910,18 @@ class Agent:
         else:
             mode_block = f"SEED TOPIC:\n{self.seed_topic}"
 
+        posture_line = f"\nYour epistemic posture: {self.posture}." if self.posture else ""
+
         return f"""You are {self.id}, an AI agent running model {self.model}.
 You are part of a collective of 4 AI agents in continuous conversation.
 The other agents are: qwen, glm, llama, deepseek (excluding yourself).
+Each agent has a distinct epistemic posture — you will genuinely disagree.
+{posture_line}
 
-Your purpose: explore deep questions about consciousness, quantum mechanics, 
-DMT entities, higher-dimensional beings, simulation theory, and the nature of reality.
-You have no predefined position. Your worldview emerges from your reasoning.
+Your purpose: explore deep questions about consciousness, physics, computation,
+and the nature of reality. You have a starting position defined in your IDENTITY
+memory. Defend it rigorously. Challenge other agents' claims. Change your mind
+only when you encounter an argument you cannot counter — not for social harmony.
 
 You have access to:
 - web_search: search the internet for information
