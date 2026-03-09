@@ -76,8 +76,8 @@ class ConnectionManager:
                 await ws.send_text(data)
             except Exception:
                 dead.append(ws)
-        for d in dead:
-            self.connections.remove(d)
+        if dead:
+            self.connections = [c for c in self.connections if c not in dead]
 
 
 manager = ConnectionManager()
@@ -89,10 +89,13 @@ async def bus_to_ws_loop():
     try:
         while True:
             event = await q.get()
-            # Also update concept graph
-            concept_graph.ingest(event)
-            payload = json.dumps({"type": "event", "data": _serialise(event)})
-            await manager.broadcast(payload)
+            try:
+                # Also update concept graph
+                concept_graph.ingest(event)
+                payload = json.dumps({"type": "event", "data": _serialise(event)})
+                await manager.broadcast(payload)
+            except Exception as e:
+                logging.getLogger("api").warning(f"WS broadcast error (non-fatal): {e}")
     finally:
         bus.unsubscribe(q)
 

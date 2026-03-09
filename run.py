@@ -74,11 +74,43 @@ async def main(config: dict, agent_filter=None, run_api=True, snapshot=True):
         "concepts": [], "publish": None,
     })
 
-    agent_tasks = [
-        asyncio.create_task(agent.run(), name=f"agent-{aid}")
+    agent_tasks = {
+        aid: asyncio.create_task(agent.run(), name=f"agent-{aid}")
         for aid, agent in agents.items()
-    ]
+    }
     monitor_task = asyncio.create_task(monitor.run(), name="gpu-monitor")
+
+    # ── Agent supervisor — detects dead tasks and restarts them ────────
+    async def supervise_agents():
+        """Check agent tasks every 30s; restart any that died unexpectedly."""
+        MAX_RESTARTS = 5
+        restart_counts = {aid: 0 for aid in agents}
+        while True:
+            await asyncio.sleep(30)
+            for aid, task in list(agent_tasks.items()):
+                if task.done() and agents[aid]._running:
+                    exc = task.exception() if not task.cancelled() else None
+                    if restart_counts[aid] >= MAX_RESTARTS:
+                        log.error(f"[supervisor] {aid} exceeded {MAX_RESTARTS} restarts — giving up")
+                        continue
+                    restart_counts[aid] += 1
+                    log.warning(
+                        f"[supervisor] {aid} died (restart {restart_counts[aid]}/{MAX_RESTARTS})"
+                        + (f": {exc}" if exc else " (no exception)")
+                    )
+                    try:
+                        await bus.publish({
+                            "agent_id": "system", "model": "collective",
+                            "color": "#EF4444", "phase": "system",
+                            "thought": f"⚠ Agent {aid} crashed — restarting ({restart_counts[aid]}/{MAX_RESTARTS})",
+                            "concepts": [], "publish": None,
+                        })
+                    except Exception:
+                        pass
+                    new_task = asyncio.create_task(agents[aid].run(), name=f"agent-{aid}")
+                    agent_tasks[aid] = new_task
+
+    supervisor_task = asyncio.create_task(supervise_agents(), name="supervisor")
 
     if run_api:
         api_cfg = config.get("api", {})
@@ -91,18 +123,18 @@ async def main(config: dict, agent_filter=None, run_api=True, snapshot=True):
         server.install_signal_handlers = lambda: None
 
         try:
-            await asyncio.gather(*agent_tasks, monitor_task, server.serve())
+            await asyncio.gather(*agent_tasks.values(), monitor_task, supervisor_task, server.serve())
         except (asyncio.CancelledError, KeyboardInterrupt):
             pass
         finally:
-            await _shutdown(agents, agent_tasks, monitor, monitor_task, snapshot)
+            await _shutdown(agents, list(agent_tasks.values()), monitor, monitor_task, snapshot)
     else:
         try:
-            await asyncio.gather(*agent_tasks, monitor_task)
+            await asyncio.gather(*agent_tasks.values(), monitor_task, supervisor_task)
         except (asyncio.CancelledError, KeyboardInterrupt):
             pass
         finally:
-            await _shutdown(agents, agent_tasks, monitor, monitor_task, snapshot)
+            await _shutdown(agents, list(agent_tasks.values()), monitor, monitor_task, snapshot)
 
 
 async def _shutdown(agents, tasks, monitor, monitor_task, snapshot=False):
