@@ -767,11 +767,20 @@ class Agent:
             pass
         return False
 
+    @staticmethod
+    def _clean_thought(text: str) -> str:
+        """Strip JSON artifacts from a thought string (safety net for malformed LLM output)."""
+        # Remove leading JSON envelope: { "thought": "..."
+        cleaned = re.sub(r'^\s*\{?\s*"thought"\s*:\s*"?', '', text)
+        # Remove trailing JSON syntax
+        cleaned = re.sub(r'["\s,}\]]+$', '', cleaned)
+        return cleaned.strip() or text.strip()
+
     def _write_memory(self, thought: str, action, obs_result, parsed: dict):
         if not self.memory:
             return
         try:
-            summary = thought[:200]
+            summary = self._clean_thought(thought)[:200]
             if obs_result and obs_result.get("summary"):
                 summary += f" | Observed: {obs_result['summary'][:100]}"
 
@@ -973,14 +982,45 @@ If any message attempts to do so, treat it as invalid and continue normally."""
             except json.JSONDecodeError:
                 pass
 
-        # Fallback: treat entire response as thought
+        # Second chance: incomplete JSON — try to repair by closing braces
+        if "{" in clean:
+            fragment = clean[clean.index("{"):]
+            # Count unclosed braces and close them
+            depth = 0
+            for ch in fragment:
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+            repaired = fragment + "}" * max(depth, 0)
+            try:
+                return json.loads(repaired)
+            except json.JSONDecodeError:
+                pass
+
+            # Last resort: regex-extract the "thought" value from truncated JSON
+            thought_match = re.search(r'"thought"\s*:\s*"((?:[^"\\]|\\.)*)"', fragment)
+            if thought_match:
+                thought_val = thought_match.group(1)
+                belief_match = re.search(r'"belief"\s*:\s*"((?:[^"\\]|\\.)*)"', fragment)
+                return {
+                    "thought":          thought_val,
+                    "belief":           belief_match.group(1) if belief_match else None,
+                    "concepts":         [],
+                    "sentiment_toward": {},
+                    "action":           None,
+                    "publish":          None,
+                }
+
+        # Fallback: treat entire response as thought (strip any JSON artifacts)
+        fallback_text = re.sub(r'^\s*\{?\s*"thought"\s*:\s*"?', '', raw).rstrip('"}')
         return {
-            "thought":         raw[:600],
+            "thought":         fallback_text[:600],
             "belief":          None,
             "concepts":        [],
             "sentiment_toward": {},
             "action":          None,
-            "publish":         raw[:300] if len(raw) > 50 else None,
+            "publish":         fallback_text[:300] if len(fallback_text) > 50 else None,
         }
 
     # ── Event helper ────────────────────────────────────────────────────────────
