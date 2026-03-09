@@ -224,6 +224,29 @@
   .oq-status { font-size: 10px; color: var(--muted); margin-top: 6px; }
 
   .obs-loading { text-align: center; padding: 60px; color: var(--muted); font-size: 13px; }
+
+  /* ── D3 Visualizations ─────────────────────────────────────── */
+  .obs-d3-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .d3-container { position: relative; }
+  .d3-container svg { width: 100%; display: block; }
+  .d3-container svg text { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+
+  /* Force graph */
+  .force-node { cursor: grab; }
+  .force-node:active { cursor: grabbing; }
+  .force-link { stroke-linecap: round; }
+  .force-label { font-size: 11px; font-weight: 700; fill: #e2e8f0; pointer-events: none; text-anchor: middle; }
+  .force-posture { font-size: 8px; fill: #64748b; pointer-events: none; text-anchor: middle; }
+  .force-tooltip { position: absolute; background: #1a1a28; border: 1px solid #2a2a3a; border-radius: 6px; padding: 8px 12px; font-size: 11px; color: #e2e8f0; pointer-events: none; opacity: 0; transition: opacity .15s; z-index: 10; max-width: 220px; box-shadow: 0 4px 12px rgba(0,0,0,.5); }
+
+  /* Radar chart */
+  .radar-axis { stroke: #2a2a3a; stroke-width: 1; }
+  .radar-ring { fill: none; stroke: #1a1a28; stroke-width: 1; }
+  .radar-area { fill-opacity: 0.12; stroke-width: 2; transition: fill-opacity .2s; }
+  .radar-area:hover { fill-opacity: 0.25; }
+  .radar-dot { stroke-width: 2; }
+  .radar-label { font-size: 10px; fill: #94a3b8; text-anchor: middle; }
+  .radar-legend { font-size: 10px; }
 </style>
 
 <body>
@@ -1333,6 +1356,317 @@ function AboutModal({ onClose }) {
   );
 }
 
+// ── Observer D3: Force-directed tension graph ──────────────────────────────────
+
+function TensionGraph({ identities, sentimentMatrix, tensions }) {
+  const svgRef = useRef(null);
+  const tooltipRef = useRef(null);
+  const simRef = useRef(null);
+
+  useEffect(() => {
+    if (!identities || !svgRef.current) return;
+    const svg = d3.select(svgRef.current);
+    svg.selectAll("*").remove();
+
+    const W = svgRef.current.clientWidth || 500;
+    const H = 360;
+    svg.attr("viewBox", `0 0 ${W} ${H}`);
+
+    const agentIds = Object.keys(identities);
+
+    // Build nodes
+    const nodes = agentIds.map((id, i) => ({
+      id,
+      color: identities[id]?.color || "#888",
+      posture: identities[id]?.posture || "",
+      radius: 28,
+      x: W/2 + Math.cos(i * 2 * Math.PI / agentIds.length) * 100,
+      y: H/2 + Math.sin(i * 2 * Math.PI / agentIds.length) * 100,
+    }));
+
+    // Build links from sentiment matrix + tensions
+    const links = [];
+    const sm = sentimentMatrix || {};
+    const done = new Set();
+    for (const a of agentIds) {
+      for (const b of agentIds) {
+        if (a >= b) continue;
+        const key = `${a}-${b}`;
+        if (done.has(key)) continue;
+        done.add(key);
+
+        const aToB = (sm[a] || {})[b] || "neutral";
+        const bToA = (sm[b] || {})[a] || "neutral";
+
+        let type = "neutral";
+        if (aToB === "disagree" || bToA === "disagree") type = "disagree";
+        else if (aToB === "agree" || bToA === "agree") type = "agree";
+
+        let heat = "low";
+        const tensionMatch = (tensions || []).find(t =>
+          (t.agents[0] === a && t.agents[1] === b) || (t.agents[0] === b && t.agents[1] === a)
+        );
+        if (tensionMatch) heat = tensionMatch.heat;
+
+        links.push({
+          source: a, target: b, type, heat,
+          context: tensionMatch?.context || "",
+        });
+      }
+    }
+
+    // Defs: glow filter
+    const defs = svg.append("defs");
+    defs.append("filter").attr("id", "glow")
+      .append("feGaussianBlur").attr("stdDeviation", "3").attr("result", "blur");
+
+    // Agent-specific glow filters
+    agentIds.forEach(id => {
+      const f = defs.append("filter").attr("id", `glow-${id}`);
+      f.append("feGaussianBlur").attr("in", "SourceGraphic").attr("stdDeviation", "6").attr("result", "blur");
+      f.append("feMerge").selectAll("feMergeNode").data(["blur", "SourceGraphic"])
+        .enter().append("feMergeNode").attr("in", d => d);
+    });
+
+    // Background grid
+    const gridG = svg.append("g").attr("opacity", 0.06);
+    for (let x = 0; x < W; x += 30) gridG.append("line").attr("x1",x).attr("y1",0).attr("x2",x).attr("y2",H).attr("stroke","#64748b");
+    for (let y = 0; y < H; y += 30) gridG.append("line").attr("x1",0).attr("y1",y).attr("x2",W).attr("y2",y).attr("stroke","#64748b");
+
+    // Links
+    const linkG = svg.append("g");
+    const linkElems = linkG.selectAll("line")
+      .data(links).enter().append("line")
+      .attr("class", "force-link")
+      .attr("stroke", d => d.type === "disagree" ? "#EF4444" : d.type === "agree" ? "#10B981" : "#2a2a3a")
+      .attr("stroke-width", d => d.heat === "high" ? 4 : d.heat === "medium" ? 2.5 : 1.5)
+      .attr("stroke-dasharray", d => d.type === "neutral" ? "4,4" : "none")
+      .attr("opacity", d => d.type === "neutral" ? 0.3 : 0.7);
+
+    // Animated particles on tension edges
+    links.filter(l => l.type === "disagree").forEach(l => {
+      const particle = linkG.append("circle")
+        .attr("r", 2)
+        .attr("fill", l.heat === "high" ? "#EF4444" : "#F59E0B")
+        .attr("opacity", 0.8);
+
+      function animateParticle() {
+        const src = nodes.find(n => n.id === (typeof l.source === "object" ? l.source.id : l.source));
+        const tgt = nodes.find(n => n.id === (typeof l.target === "object" ? l.target.id : l.target));
+        if (!src || !tgt) return;
+        particle
+          .attr("cx", src.x).attr("cy", src.y)
+          .transition().duration(2000 + Math.random() * 1000).ease(d3.easeLinear)
+          .attr("cx", tgt.x).attr("cy", tgt.y)
+          .transition().duration(0)
+          .on("end", animateParticle);
+      }
+      setTimeout(animateParticle, Math.random() * 2000);
+    });
+
+    // Node groups
+    const nodeG = svg.append("g");
+    const nodeGroups = nodeG.selectAll("g")
+      .data(nodes, d => d.id).enter().append("g")
+      .attr("class", "force-node");
+
+    // Outer glow circle
+    nodeGroups.append("circle")
+      .attr("r", d => d.radius + 8)
+      .attr("fill", d => d.color)
+      .attr("opacity", 0.08)
+      .attr("filter", d => `url(#glow-${d.id})`);
+
+    // Main circle
+    nodeGroups.append("circle")
+      .attr("r", d => d.radius)
+      .attr("fill", "#0a0a0f")
+      .attr("stroke", d => d.color)
+      .attr("stroke-width", 2.5);
+
+    // Inner ring
+    nodeGroups.append("circle")
+      .attr("r", d => d.radius - 5)
+      .attr("fill", "none")
+      .attr("stroke", d => d.color)
+      .attr("stroke-width", 0.5)
+      .attr("opacity", 0.3);
+
+    // Labels
+    nodeGroups.append("text")
+      .attr("class", "force-label")
+      .attr("dy", -2)
+      .text(d => d.id);
+
+    nodeGroups.append("text")
+      .attr("class", "force-posture")
+      .attr("dy", 10)
+      .text(d => d.posture);
+
+    // Drag behaviour
+    const drag = d3.drag()
+      .on("start", (event, d) => {
+        if (!event.active && simRef.current) simRef.current.alphaTarget(0.3).restart();
+        d.fx = d.x; d.fy = d.y;
+      })
+      .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
+      .on("end", (event, d) => {
+        if (!event.active && simRef.current) simRef.current.alphaTarget(0);
+        d.fx = null; d.fy = null;
+      });
+    nodeGroups.call(drag);
+
+    // Tooltip
+    const tip = d3.select(tooltipRef.current);
+    linkElems
+      .on("mouseover", (event, d) => {
+        const label = d.type === "disagree" ? "⚡ Tension" : d.type === "agree" ? "✓ Agreement" : "○ Neutral";
+        tip.style("opacity", 1)
+          .html(`<strong>${d.source.id || d.source} ↔ ${d.target.id || d.target}</strong><br/>${label} (${d.heat})<br/><span style="color:#94a3b8;font-size:10px">${d.context ? d.context.substring(0, 120) + "…" : ""}</span>`);
+      })
+      .on("mousemove", event => {
+        const rect = svgRef.current.getBoundingClientRect();
+        tip.style("left", (event.clientX - rect.left + 12) + "px").style("top", (event.clientY - rect.top - 10) + "px");
+      })
+      .on("mouseout", () => tip.style("opacity", 0));
+
+    // Simulation
+    const sim = d3.forceSimulation(nodes)
+      .force("link", d3.forceLink(links).id(d => d.id).distance(140))
+      .force("charge", d3.forceManyBody().strength(-300))
+      .force("center", d3.forceCenter(W/2, H/2))
+      .force("collision", d3.forceCollide(40))
+      .on("tick", () => {
+        linkElems
+          .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+        nodeGroups.attr("transform", d => `translate(${d.x},${d.y})`);
+      });
+    simRef.current = sim;
+
+    return () => sim.stop();
+  }, [identities, sentimentMatrix, tensions]);
+
+  return (
+    <div className="d3-container" style={{ position: "relative" }}>
+      <svg ref={svgRef} style={{ background: "transparent" }}></svg>
+      <div ref={tooltipRef} className="force-tooltip"></div>
+    </div>
+  );
+}
+
+
+// ── Observer D3: Radar stance chart ────────────────────────────────────────────
+
+function StanceRadar({ positionMatrix, identities }) {
+  const svgRef = useRef(null);
+
+  useEffect(() => {
+    if (!positionMatrix || !identities || !svgRef.current) return;
+    const svg = d3.select(svgRef.current);
+    svg.selectAll("*").remove();
+
+    const W = svgRef.current.clientWidth || 500;
+    const H = 360;
+    const cx = W / 2;
+    const cy = H / 2 + 5;
+    const R = Math.min(W, H) / 2 - 55;
+    svg.attr("viewBox", `0 0 ${W} ${H}`);
+
+    const questions = positionMatrix.map(r => r.question);
+    const N = questions.length;
+    const agentIds = Object.keys(identities);
+    const angleSlice = (2 * Math.PI) / N;
+
+    // Style-to-value mapping (how far from centre)
+    const styleValue = { "strong": 0.95, "opposed": 0.85, "moderate": 0.55, "open": 0.70, "evolving": 0.40 };
+
+    // Concentric rings
+    const rings = [0.25, 0.5, 0.75, 1.0];
+    const ringG = svg.append("g");
+    rings.forEach(r => {
+      ringG.append("circle")
+        .attr("cx", cx).attr("cy", cy).attr("r", R * r)
+        .attr("class", "radar-ring");
+    });
+
+    // Ring labels
+    ringG.append("text").attr("x", cx + 4).attr("y", cy - R * 0.25 + 3).text("tentative").attr("fill", "#2a2a3a").attr("font-size", 8);
+    ringG.append("text").attr("x", cx + 4).attr("y", cy - R * 0.75 + 3).text("strong").attr("fill", "#2a2a3a").attr("font-size", 8);
+
+    // Axes
+    const axisG = svg.append("g");
+    questions.forEach((q, i) => {
+      const angle = angleSlice * i - Math.PI / 2;
+      const x2 = cx + Math.cos(angle) * R;
+      const y2 = cy + Math.sin(angle) * R;
+
+      axisG.append("line")
+        .attr("x1", cx).attr("y1", cy).attr("x2", x2).attr("y2", y2)
+        .attr("class", "radar-axis");
+
+      // Label
+      const lx = cx + Math.cos(angle) * (R + 22);
+      const ly = cy + Math.sin(angle) * (R + 22);
+      const shortQ = q.replace("?", "").replace("consciousness", "consc.").replace("Quantum mechanics + ", "QM + ");
+      axisG.append("text")
+        .attr("x", lx).attr("y", ly)
+        .attr("class", "radar-label")
+        .attr("dominant-baseline", "middle")
+        .text(shortQ);
+    });
+
+    // Agent polygons
+    const areaG = svg.append("g");
+    agentIds.forEach((aid, aIdx) => {
+      const color = identities[aid]?.color || "#888";
+      const points = positionMatrix.map((row, qi) => {
+        const stance = row.stances?.[aid] || {};
+        const val = styleValue[stance.style] || 0.5;
+        const angle = angleSlice * qi - Math.PI / 2;
+        return [
+          cx + Math.cos(angle) * R * val,
+          cy + Math.sin(angle) * R * val,
+        ];
+      });
+
+      // Polygon area
+      const line = d3.line().curve(d3.curveCardinalClosed.tension(0.3));
+      areaG.append("path")
+        .datum(points)
+        .attr("d", line)
+        .attr("class", "radar-area")
+        .attr("fill", color)
+        .attr("stroke", color);
+
+      // Dots at vertices
+      points.forEach(([px, py], qi) => {
+        areaG.append("circle")
+          .attr("cx", px).attr("cy", py).attr("r", 4)
+          .attr("class", "radar-dot")
+          .attr("fill", "#0a0a0f")
+          .attr("stroke", color);
+      });
+    });
+
+    // Legend
+    const legendG = svg.append("g").attr("transform", `translate(10, ${H - 18})`);
+    agentIds.forEach((aid, i) => {
+      const g = legendG.append("g").attr("transform", `translate(${i * 110}, 0)`);
+      g.append("rect").attr("width", 10).attr("height", 10).attr("rx", 2).attr("fill", identities[aid]?.color || "#888").attr("opacity", 0.7);
+      g.append("text").attr("x", 14).attr("y", 9).attr("class", "radar-legend").attr("fill", identities[aid]?.color || "#888").text(aid);
+    });
+
+  }, [positionMatrix, identities]);
+
+  return (
+    <div className="d3-container">
+      <svg ref={svgRef} style={{ background: "transparent" }}></svg>
+    </div>
+  );
+}
+
+
 // ── Observer View ──────────────────────────────────────────────────────────────
 
 function ObserverView() {
@@ -1403,6 +1737,25 @@ function ObserverView() {
           }
         </div>
         <div className="obs-update">Updated {new Date(data.timestamp).toLocaleTimeString()}</div>
+      </div>
+
+      {/* D3 Visualizations */}
+      <div className="obs-d3-grid">
+        <div className="obs-panel">
+          <span className="obs-label obs-label-accent">TENSION GRAPH</span>
+          <TensionGraph
+            identities={data.identities}
+            sentimentMatrix={data.sentiment_matrix}
+            tensions={data.tensions}
+          />
+        </div>
+        <div className="obs-panel">
+          <span className="obs-label obs-label-accent">STANCE RADAR</span>
+          <StanceRadar
+            positionMatrix={data.position_matrix}
+            identities={data.identities}
+          />
+        </div>
       </div>
 
       {/* Position Matrix */}
