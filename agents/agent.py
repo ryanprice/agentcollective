@@ -581,9 +581,12 @@ class Agent:
             await bus.publish(self._event("system", msg))
             log.warning(f"[{self.id}] {e}")
 
-            # After N consecutive failures, back off hard so we don't spam Ollama
+            # Exponential backoff — caps at 5 minutes
             if self._consecutive_failures >= self.consec_fail_threshold:
-                pause = self.consec_fail_pause + random.uniform(0, 30)
+                pause = min(
+                    self.consec_fail_pause * (1.5 ** min(self._consecutive_failures - self.consec_fail_threshold, 8)),
+                    300,
+                ) + random.uniform(0, 15)
                 log.warning(f"[{self.id}] {self._consecutive_failures} consecutive failures — cooling down {pause:.0f}s")
                 await bus.publish(self._event("system",
                     f"😴 Cooling down {pause:.0f}s after {self._consecutive_failures} consecutive timeouts"))
@@ -594,6 +597,17 @@ class Agent:
             self._consecutive_failures += 1
             await bus.publish(self._event("system", f"⚠ Ollama error on loop {self._loop_count}: {e}"))
             log.error(f"[{self.id}] Ollama error: {e}")
+
+            # Same exponential backoff for non-timeout errors (503, 500, etc.)
+            if self._consecutive_failures >= self.consec_fail_threshold:
+                pause = min(
+                    self.consec_fail_pause * (1.5 ** min(self._consecutive_failures - self.consec_fail_threshold, 8)),
+                    300,
+                ) + random.uniform(0, 15)
+                log.warning(f"[{self.id}] {self._consecutive_failures} consecutive failures — cooling down {pause:.0f}s")
+                await bus.publish(self._event("system",
+                    f"🟠 Cooling down {pause:.0f}s after {self._consecutive_failures} consecutive failures"))
+                await asyncio.sleep(pause)
             return
 
         # Successful call — reset failure counter
