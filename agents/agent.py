@@ -628,6 +628,12 @@ class Agent:
         parsed = self._parse_response(raw)
         thought = parsed.get("thought", raw[:500])
 
+        # Coerce fields that small models sometimes return as wrong types
+        if not isinstance(parsed.get("concepts"), list):
+            parsed["concepts"] = []
+        if not isinstance(parsed.get("sentiment_toward"), dict):
+            parsed["sentiment_toward"] = {}
+
         # Only publish / update conversation if we got a real response
         await bus.publish(self._event(
             "reason",
@@ -656,7 +662,11 @@ class Agent:
         action      = parsed.get("action")
         obs_result  = None
 
-        if action:
+        # Small models sometimes return "action": "think" (string) instead of {"type": "think"}
+        if isinstance(action, str):
+            action = {"type": action} if action else None
+
+        if action and isinstance(action, dict):
             action_type = action.get("type", "think")
             await bus.publish(self._event("plan", f"Action: {action_type} — {action.get('query', '')}"))
 
