@@ -111,12 +111,12 @@ skills:
 
 gpu_monitor:
   poll_seconds:  10
-  temp_warn:     75    # °C → throttle
-  temp_hot:      85    # °C → pause all agents
-  temp_critical: 92    # °C → stop heaviest model
-  mem_warn:      80    # %  → throttle
-  mem_hot:       90    # %  → pause all agents
-  mem_critical:  95    # %  → stop heaviest model
+  temp_warn:     80    # °C → throttle  (raised — GB10 runs warm under full load)
+  temp_hot:      88    # °C → pause all agents
+  temp_critical: 93    # °C → stop heaviest model
+  mem_warn:      95    # %  → throttle  (dedicated hardware — push VRAM hard)
+  mem_hot:       97    # %  → pause all agents
+  mem_critical:  98    # %  → stop heaviest model  (~2.5 GB headroom on 128 GB)
 
 
   host: 0.0.0.0

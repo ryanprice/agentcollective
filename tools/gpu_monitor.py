@@ -9,13 +9,13 @@ Implements escalating safeguards:
   Level 2 — HOT:      Pause all agents (no new LLM calls)
   Level 3 — CRITICAL: Stop heaviest model first, stay paused
 
-Thresholds (configurable in config.yaml):
-  temp_warn:     75°C   → Level 1
-  temp_hot:      85°C   → Level 2
-  temp_critical: 92°C   → Level 3
-  mem_warn:      80%    → Level 1
-  mem_hot:       90%    → Level 2
-  mem_critical:  95%    → Level 3
+Thresholds (configurable in config.yaml — tuned for dedicated GB10 hardware):
+  temp_warn:     80°C   → Level 1
+  temp_hot:      88°C   → Level 2
+  temp_critical: 93°C   → Level 3
+  mem_warn:      95%    → Level 1   (push VRAM hard on dedicated hardware)
+  mem_hot:       97%    → Level 2
+  mem_critical:  98%    → Level 3   (~2.5 GB headroom on 128 GB unified)
 """
 
 import asyncio
@@ -55,12 +55,12 @@ class GPUStats:
 
 @dataclass
 class MonitorConfig:
-    temp_warn:     float = 75.0
-    temp_hot:      float = 85.0
-    temp_critical: float = 92.0
-    mem_warn:      float = 80.0
-    mem_hot:       float = 90.0
-    mem_critical:  float = 95.0
+    temp_warn:     float = 80.0
+    temp_hot:      float = 88.0
+    temp_critical: float = 93.0
+    mem_warn:      float = 95.0
+    mem_hot:       float = 97.0
+    mem_critical:  float = 98.0
     poll_seconds:  float = 10.0
 
     @classmethod
@@ -83,7 +83,12 @@ class GPUMonitor:
 
     async def run(self):
         self._running = True
-        log.info("GPU monitor started")
+        c = self.config
+        log.info(
+            f"GPU monitor started — thresholds: "
+            f"temp {c.temp_warn}/{c.temp_hot}/{c.temp_critical}°C  "
+            f"mem {c.mem_warn}/{c.mem_hot}/{c.mem_critical}%"
+        )
         while self._running:
             try:
                 self.stats = self._read_gpu_stats()
