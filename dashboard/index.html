@@ -451,7 +451,7 @@ function ToolLog({ events }) {
     );
   };
 
-  const typeClass = (t) => t === "install_skill" || t === "run_skill" ? "skill" : t === "run_script" ? "script" : "search";
+  const typeClass = (t) => t === "install_skill" || t === "run_skill" || t === "search_skills" ? "skill" : t === "run_script" ? "script" : "search";
 
   return (
     <div className="tool-log" style={{ display:"flex", flexDirection:"row", flex:1, overflow:"hidden" }}>

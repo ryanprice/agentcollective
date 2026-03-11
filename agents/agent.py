@@ -736,13 +736,32 @@ class Agent:
                 "raw":     result,
             }
 
+        elif atype == "search_skills":
+            query = action.get("query", "") or skill or ""
+            await bus.publish(self._event("act", f"Searching skills: {query}", extra={"action": {"type": "search_skills", "query": query}}))
+            results = self.skills.search(query)
+            if results:
+                lines = [f"  {r['name']}: {r['description']}" for r in results]
+                summary = f"Found {len(results)} matching skills:\n" + "\n".join(lines)
+                summary += "\n\nUse install_skill with the EXACT name above to install one."
+            else:
+                summary = f"No skills found matching '{query}'. Try broader keywords (e.g. 'database', 'chemistry', 'statistics')."
+            return {
+                "type":    "search_skills",
+                "summary": summary,
+                "raw":     results,
+            }
+
         elif atype == "install_skill":
             await bus.publish(self._event("act", f"Installing skill: {skill}", extra={"action": {"type": "install_skill", "skill": skill}}))
             result = await self.skills.install(skill)
+            summary = result.get("status", result.get("error", "unknown"))
+            if result.get("ok") and result.get("description"):
+                summary += f" — {result['description'][:100]}"
             return {
                 "type":    "install_skill",
                 "skill":   skill,
-                "summary": f"Skill install result: {result.get('status', result.get('error'))}",
+                "summary": f"Skill install result: {summary}",
                 "raw":     result,
             }
 
@@ -902,6 +921,7 @@ class Agent:
             patterns = {
                 "search": ["Searched:", "search", "Query:"],
                 "run_script": ["script", "Running script", "code"],
+                "search_skills": ["Searching skills", "search_skills"],
                 "install_skill": ["install", "skill", "Skill install"],
                 "belief": ["Belief:", "conclude", "believe"],
                 "broadcast": ["broadcast", "publish", "share"],
@@ -922,6 +942,7 @@ class Agent:
             labels = {
                 "search": "I frequently search for information to ground my reasoning.",
                 "run_script": "I regularly write and execute Python scripts to test ideas.",
+                "search_skills": "I search the skill registry to discover capabilities before installing.",
                 "install_skill": "I actively expand my capabilities by installing skills.",
                 "belief": "I crystallise beliefs when I reach genuine conclusions.",
                 "broadcast": "I share insights with the collective when I have something meaningful.",
@@ -992,9 +1013,8 @@ class Agent:
 
     def _system_prompt(self) -> str:
         installed  = [s["name"] for s in self.skills.installed()]
-        available  = self.skills.available()
         skills_str = ", ".join(installed) if installed else "none yet"
-        avail_str  = ", ".join(available) if available else "run install_skill to fetch the registry"
+        skill_count = self.skills.skill_count()
 
         mode = getattr(self, "_start_mode", "fresh")
         if mode == "resume":
@@ -1028,7 +1048,8 @@ only when you encounter an argument you cannot counter — not for social harmon
 
 You have access to:
 - web_search: search the internet for information
-- install_skill: install a skill from the Anthropic skills registry (use EXACT names below)
+- search_skills: search the skill registry by keyword (e.g. "database", "physics", "visualization"). Returns matching skill names you can install. ALWAYS search before installing.
+- install_skill: install a skill by its EXACT name (get the name from search_skills first)
 - run_script: execute a sandboxed Python script (pure computation only — no imports except: math, json, datetime, re, collections, itertools, statistics, numpy, scipy, pandas, sympy, networkx, and agent_api)
   To call an LLM from a script, use the injected agent_api module:
     import agent_api
@@ -1037,7 +1058,7 @@ You have access to:
   DO NOT import anthropic, requests, urllib, http, or any SDK directly — they are blocked.
 - think: just reason and respond (no external action)
 
-Available skills (use these exact names): {avail_str}
+Skill registry: {skill_count} skills available. Use search_skills to find them by keyword — do NOT guess names.
 Installed skills: {skills_str}
 
 {mode_block}
@@ -1049,9 +1070,9 @@ You MUST respond in this exact JSON format (no preamble, no markdown fences):
   "concepts": ["concept1", "concept2"],
   "sentiment_toward": {{"agent_id": "agree|disagree|neutral"}},
   "action": {{
-    "type": "search|install_skill|run_skill|run_script|think",
-    "query": "search query if type=search",
-    "skill": "skill name if type=install_skill or run_skill",
+    "type": "search|search_skills|install_skill|run_skill|run_script|think",
+    "query": "search query if type=search or search_skills",
+    "skill": "EXACT skill name if type=install_skill or run_skill (get from search_skills first)",
     "code": "python code if type=run_script"
   }} or null,
   "publish": "Message to broadcast to other agents (null if nothing to say)"

@@ -3,14 +3,16 @@ Skill Manager
 -------------
 Pulls skills from https://github.com/anthropics/skills
 Maintains per-agent skill registry.
-Only allowlisted skills can be installed.
+
+Agents discover skills via search_skills(query) — keyword matching against
+skill names and descriptions. This prevents hallucination of non-existent
+skill names.
 """
 
 import asyncio
 import json
 import os
 import re
-import subprocess
 import time
 from pathlib import Path
 from typing import Optional
@@ -33,6 +35,7 @@ class SkillManager:
         self.log_file     = self.agent_dir / "installed.json"
         self._ensure_dirs()
         self._available_cache: list[str] = []
+        self._desc_cache: dict[str, str] = {}  # skill_name → description
 
     def _ensure_dirs(self):
         self.agent_dir.mkdir(parents=True, exist_ok=True)
@@ -65,6 +68,96 @@ class SkillManager:
         self._available_cache = sorted(names)
         return self._available_cache
 
+    def _get_description(self, skill_name: str) -> str:
+        """Get description for a skill (cached). Reads from SKILL.md frontmatter."""
+        if skill_name in self._desc_cache:
+            return self._desc_cache[skill_name]
+        skill_path = self._find_skill_path(skill_name)
+        if not skill_path:
+            return ""
+        md_path = skill_path / "SKILL.md"
+        if not md_path.exists():
+            return ""
+        try:
+            text = md_path.read_text(encoding="utf-8")[:2000]  # only need frontmatter
+            desc = self._extract_description(text)
+            self._desc_cache[skill_name] = desc
+            return desc
+        except Exception:
+            return ""
+
+    def search(self, query: str, limit: int = 10) -> list[dict]:
+        """
+        Search available skills by keyword.
+        Matches against skill name and description.
+        Returns list of {name, description, score} sorted by relevance.
+        """
+        query = query.strip().lower()
+        if not query:
+            return []
+
+        keywords = set(query.replace("-", " ").replace("_", " ").split())
+        avail = self.available()
+        results = []
+
+        for name in avail:
+            # Tokenize skill name
+            name_tokens = set(name.replace("-", " ").replace("_", " ").lower().split())
+            desc = self._get_description(name).lower()
+            desc_tokens = set(desc.replace("-", " ").replace("_", " ").split())
+
+            score = 0
+
+            # Exact name match
+            if query == name:
+                score += 100
+
+            # Query appears as substring of name
+            if query in name:
+                score += 50
+
+            # Keyword overlap with name (strong signal)
+            name_overlap = keywords & name_tokens
+            score += len(name_overlap) * 20
+
+            # Keyword overlap with description (weaker signal)
+            desc_overlap = keywords & desc_tokens
+            score += len(desc_overlap) * 5
+
+            # Partial substring matches in name
+            for kw in keywords:
+                if any(kw in t for t in name_tokens):
+                    score += 10
+                if any(t in kw for t in name_tokens if len(t) > 2):
+                    score += 5
+
+            if score > 0:
+                results.append({
+                    "name": name,
+                    "description": self._get_description(name)[:120],
+                    "score": score,
+                })
+
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return results[:limit]
+
+    def _fuzzy_suggest(self, skill_name: str, limit: int = 5) -> list[str]:
+        """Suggest similar skill names for a failed install (typo correction)."""
+        candidates = self.search(skill_name, limit=limit)
+        if candidates:
+            return [c["name"] for c in candidates]
+
+        # Fallback: simple substring match on name parts
+        parts = skill_name.replace("-", " ").replace("_", " ").split()
+        avail = self.available()
+        matches = []
+        for name in avail:
+            for part in parts:
+                if part in name and len(part) > 2:
+                    matches.append(name)
+                    break
+        return matches[:limit]
+
     def _find_skill_path(self, skill_name: str) -> Optional[Path]:
         """Search all sources for a skill directory containing SKILL.md."""
         # Check local dirs first
@@ -92,8 +185,11 @@ class SkillManager:
             if ok:
                 skill_path = self.registry_dir / "skills" / skill_name
             else:
-                avail = self.available()
-                hint  = f"Available skills: {avail}" if avail else "Could not fetch skill list."
+                suggestions = self._fuzzy_suggest(skill_name)
+                if suggestions:
+                    hint = f"Did you mean: {', '.join(suggestions)}? Use search_skills to find the right name."
+                else:
+                    hint = "Use search_skills with keywords to find available skills."
                 return {"ok": False, "skill": skill_name, "error": f"Skill '{skill_name}' not found. {hint}"}
 
         skill_md_path = skill_path / "SKILL.md"
@@ -120,6 +216,10 @@ class SkillManager:
         if skill_path:
             return (skill_path / "SKILL.md").read_text(encoding="utf-8")
         return None
+
+    def skill_count(self) -> int:
+        """Return total number of available skills."""
+        return len(self.available())
 
     async def _sparse_clone(self, skill_name: str) -> bool:
         """
