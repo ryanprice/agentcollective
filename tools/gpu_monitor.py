@@ -2,26 +2,26 @@
 GPU Monitor
 -----------
 Monitors GPU temperature and memory usage via nvidia-smi.
-Implements escalating safeguards:
+Implements escalating safeguards with Ollama model unloading:
 
   Level 0 — NORMAL:   All clear
   Level 1 — WARM:     Slow loop delays (throttle)
-  Level 2 — HOT:      Pause all agents (no new LLM calls)
-  Level 3 — CRITICAL: Stop heaviest model first, stay paused
+  Level 2 — HOT:      Pause all agents, unload smallest model from Ollama VRAM
+  Level 3 — CRITICAL: Unload heaviest model from Ollama VRAM, stay paused
 
-Thresholds (configurable in config.yaml — tuned for dedicated GB10 hardware):
-  temp_warn:     80°C   → Level 1
-  temp_hot:      88°C   → Level 2
-  temp_critical: 93°C   → Level 3
-  mem_warn:      95%    → Level 1   (push VRAM hard on dedicated hardware)
-  mem_hot:       97%    → Level 2
-  mem_critical:  98%    → Level 3   (~2.5 GB headroom on 128 GB unified)
+Key design decisions:
+  - Hysteresis: level changes require 2 consecutive readings to prevent flapping
+  - Ollama unloading: at HOT/CRITICAL, we POST keep_alive=0 to Ollama to actually
+    free VRAM — just stopping the Python agent task does NOT release model weights
+  - Wider thresholds: 90/94/97 gives 7% range between first-throttle and OOM danger
 """
 
 import asyncio
+import json as _json
 import logging
 import subprocess
 import time
+import urllib.request
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Optional
@@ -30,12 +30,14 @@ from bus.broker import bus
 
 log = logging.getLogger("gpu_monitor")
 
+OLLAMA_BASE = "http://localhost:11434"
+
 
 class SafeLevel(IntEnum):
     NORMAL   = 0
     WARM     = 1  # throttle
-    HOT      = 2  # pause all
-    CRITICAL = 3  # stop heaviest
+    HOT      = 2  # pause all + unload smallest
+    CRITICAL = 3  # unload heaviest + stay paused
 
 
 @dataclass
@@ -58,10 +60,11 @@ class MonitorConfig:
     temp_warn:     float = 80.0
     temp_hot:      float = 88.0
     temp_critical: float = 93.0
-    mem_warn:      float = 95.0
-    mem_hot:       float = 97.0
-    mem_critical:  float = 98.0
+    mem_warn:      float = 90.0
+    mem_hot:       float = 94.0
+    mem_critical:  float = 97.0
     poll_seconds:  float = 10.0
+    hysteresis:    int   = 2     # consecutive readings before level change
 
     @classmethod
     def from_dict(cls, d: dict) -> "MonitorConfig":
@@ -76,8 +79,13 @@ class GPUMonitor:
         self.level:  SafeLevel = SafeLevel.NORMAL
         self._paused_agents: set[str] = set()
         self._stopped_agents: set[str] = set()
+        self._unloaded_models: set[str] = set()  # models we told Ollama to unload
         self._running = False
         self.history: list[dict] = []     # for dashboard
+
+        # Hysteresis: track consecutive readings at a candidate level
+        self._pending_level: SafeLevel = SafeLevel.NORMAL
+        self._pending_count: int = 0
 
     # ── Public ────────────────────────────────────────────────────────────────
 
@@ -87,14 +95,36 @@ class GPUMonitor:
         log.info(
             f"GPU monitor started — thresholds: "
             f"temp {c.temp_warn}/{c.temp_hot}/{c.temp_critical}°C  "
-            f"mem {c.mem_warn}/{c.mem_hot}/{c.mem_critical}%"
+            f"mem {c.mem_warn}/{c.mem_hot}/{c.mem_critical}%  "
+            f"hysteresis={c.hysteresis} readings"
         )
         while self._running:
             try:
                 self.stats = self._read_gpu_stats()
-                new_level  = self._compute_level()
-                if new_level != self.level:
-                    await self._apply_level(new_level)
+                raw_level  = self._compute_level()
+
+                # Hysteresis: require consecutive readings before changing level
+                # Exception: escalation to CRITICAL is always immediate (safety)
+                if raw_level != self.level:
+                    if raw_level == SafeLevel.CRITICAL:
+                        # CRITICAL is always immediate — no waiting
+                        await self._apply_level(raw_level)
+                        self._pending_level = raw_level
+                        self._pending_count = 0
+                    elif raw_level == self._pending_level:
+                        self._pending_count += 1
+                        if self._pending_count >= self.config.hysteresis:
+                            await self._apply_level(raw_level)
+                            self._pending_count = 0
+                    else:
+                        # New candidate level — start counting
+                        self._pending_level = raw_level
+                        self._pending_count = 1
+                else:
+                    # Level is stable — reset pending
+                    self._pending_level = self.level
+                    self._pending_count = 0
+
                 self._record_history()
             except Exception as e:
                 log.warning(f"GPU monitor error: {e}")
@@ -110,6 +140,7 @@ class GPUMonitor:
             "gpus":        [self._stat_dict(s) for s in self.stats],
             "paused":      list(self._paused_agents),
             "stopped":     list(self._stopped_agents),
+            "unloaded":    list(self._unloaded_models),
             "history":     self.history[-60:],
         }
 
@@ -243,27 +274,27 @@ class GPUMonitor:
         # ── Escalation ────────────────────────────────────────
         if new_level == SafeLevel.CRITICAL:
             await self._pause_all()
-            await self._stop_heaviest()
+            await self._unload_model(heaviest=True)
 
         elif new_level == SafeLevel.HOT:
             await self._pause_all()
+            await self._unload_model(heaviest=False)
 
         # ── De-escalation ─────────────────────────────────────
         elif new_level == SafeLevel.WARM:
-            # Unpause agents that were paused at HOT/CRITICAL
-            # Restart stopped agents — throttled delays will keep load manageable
-            await self._resume_all()
+            # Unpause agents but keep throttled delays
+            await self._resume_all(reload_models=False)
             await self._apply_throttle()
 
         elif new_level == SafeLevel.NORMAL:
-            await self._resume_all()
+            await self._resume_all(reload_models=True)
 
     async def _apply_throttle(self):
         """Increase loop delays on all running agents."""
         for agent in self.agents.values():
             agent.loop_config["min_delay_seconds"] = 15
             agent.loop_config["max_delay_seconds"] = 30
-        log.info("Throttle applied: loop delay increased to 15–30s")
+        log.info("Throttle applied: loop delay increased to 15-30s")
 
     async def _pause_all(self):
         """Set a pause flag on all agents — they finish current iteration then wait."""
@@ -275,8 +306,11 @@ class GPUMonitor:
                 self._paused_agents.add(agent_id)
         log.warning(f"All agents paused: {list(self._paused_agents)}")
 
-    async def _stop_heaviest(self):
-        """Stop the agent running the heaviest model (largest param count heuristic)."""
+    async def _unload_model(self, heaviest: bool = True):
+        """
+        Tell Ollama to unload a model from VRAM (keep_alive=0).
+        This actually frees GPU memory — just stopping the agent task does NOT.
+        """
         model_weight = {
             "qwen2.5-coder:32b":      32,
             "glm-4.7-flash:latest":   7,
@@ -285,26 +319,68 @@ class GPUMonitor:
             "llama3.3:70b":           70,
             "nemotron-3-nano:latest": 3,
         }
-        running = [
+        candidates = [
             a for a in self.agents.values()
-            if a.id not in self._stopped_agents
+            if a.model not in self._unloaded_models
         ]
-        if not running:
+        if not candidates:
+            log.warning("No more models to unload")
             return
-        heaviest = max(running, key=lambda a: model_weight.get(a.model, 10))
-        await heaviest.stop()
-        self._stopped_agents.add(heaviest.id)
-        log.warning(f"Stopped heaviest agent: {heaviest.id} ({heaviest.model})")
 
-    async def _resume_all(self):
+        if heaviest:
+            target = max(candidates, key=lambda a: model_weight.get(a.model, 10))
+        else:
+            target = min(candidates, key=lambda a: model_weight.get(a.model, 10))
+
+        model_name = target.model
+
+        # Stop the agent task first
+        await target.stop()
+        self._stopped_agents.add(target.id)
+
+        # Tell Ollama to unload the model from VRAM via keep_alive=0
+        await self._ollama_unload(target.id, model_name)
+
+    async def _ollama_unload(self, agent_id: str, model_name: str):
+        """POST keep_alive=0 to Ollama to evict model from VRAM."""
+        def _do_unload():
+            payload = _json.dumps({"model": model_name, "keep_alive": 0}).encode()
+            req = urllib.request.Request(
+                f"{OLLAMA_BASE}/api/generate",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    return resp.status
+            except Exception as e:
+                return str(e)
+
+        try:
+            result = await asyncio.get_event_loop().run_in_executor(None, _do_unload)
+            if result == 200:
+                self._unloaded_models.add(model_name)
+                log.warning(
+                    f"Unloaded {agent_id} ({model_name}) from VRAM — "
+                    f"agent stopped + model evicted"
+                )
+            else:
+                log.warning(f"Ollama unload for {model_name}: {result}")
+                self._unloaded_models.add(model_name)  # mark anyway
+        except Exception as e:
+            log.warning(f"Failed to unload {model_name} from Ollama: {e}")
+            self._unloaded_models.add(model_name)
+
+    async def _resume_all(self, reload_models: bool = True):
         """Resume paused agents, restart stopped agents, and restore normal delays."""
         for agent_id, agent in self.agents.items():
             if getattr(agent, "_paused", False):
                 agent._paused = False
                 self._paused_agents.discard(agent_id)
 
-        # Restart agents that were hard-stopped at CRITICAL level
-        if self._stopped_agents:
+        # Restart agents that were hard-stopped at HOT/CRITICAL level
+        if self._stopped_agents and reload_models:
             for agent_id in list(self._stopped_agents):
                 agent = self.agents.get(agent_id)
                 if agent:
@@ -312,6 +388,7 @@ class GPUMonitor:
                     asyncio.create_task(agent.run(), name=f"agent-{agent_id}")
             restarted = list(self._stopped_agents)
             self._stopped_agents.clear()
+            self._unloaded_models.clear()
             await bus.publish({
                 "agent_id": "gpu_monitor",
                 "model":    "system",
@@ -319,7 +396,7 @@ class GPUMonitor:
                 "phase":    "system",
                 "thought":  f"Restarted previously stopped agents: {restarted}",
                 "concepts": ["gpu", "safeguard", "recovery"],
-                "publish":  f"GPU temps normal — restarting {', '.join(restarted)}",
+                "publish":  f"GPU normal — restarting {', '.join(restarted)}",
             })
 
         # Restore normal delays
