@@ -7,4 +7,8 @@
 - [2026-03-08 12:16] I frequently search for information to ground my reasoning. I actively expand my capabilities by installing skills.
 
 ## [SEMANTIC]
+- [2026-03-10 11:15] I need to re-examine my assumptions about consciousness and the materialist framework.
+
+- [2026-03-10 10:48] The materialist framework is unfalsifiable and therefore empty.
+
 - [2026-03-08 17:19] The unified mathematical framework is supported by the intersection of Orch-OR and the subjective creator concept.

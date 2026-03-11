@@ -52,7 +52,6 @@ SCRIPT_DIR="$SCRIPT_DIR"
 PORT=8000
 LOG_DIR="\$SCRIPT_DIR/logs/service"
 AC_LOG="\$LOG_DIR/agentcollective.log"
-NGROK_LOG="\$LOG_DIR/ngrok.log"
 PID_FILE="\$LOG_DIR/pids"
 VENV="\$SCRIPT_DIR/.venv"
 
@@ -105,52 +104,6 @@ for i in \$(seq 1 30); do
   fi
 done
 
-# ── Start ngrok ───────────────────────────────────────────────────
-echo -e "\${CYAN}  Starting ngrok tunnel…\${NC}"
-snap run ngrok http \$PORT --log=stdout --log-format=json >> "\$NGROK_LOG" 2>&1 &
-NGROK_PID=\$!
-echo "\$NGROK_PID" >> "\$PID_FILE"
-echo -e "\${DIM}  pid \$NGROK_PID  →  \$NGROK_LOG\${NC}"
-
-# Poll for public URL
-# Detect which port ngrok's local API is actually on (it increments if 4040 is taken)
-NGROK_PORT=""
-echo -ne "\${DIM}  Waiting for tunnel"
-for i in \$(seq 1 40); do
-  sleep 2; echo -n "."
-
-  # Find the port ngrok opened using our known PID
-  if [[ -z "\$NGROK_PORT" ]]; then
-    NGROK_PORT=\$(ss -tlnp 2>/dev/null | grep "pid=\$NGROK_PID," | grep -oP '127\.0\.0\.1:\K\d+' | head -1 || true)
-  fi
-
-  [[ -z "\$NGROK_PORT" ]] && continue
-
-  TUNNEL_JSON=\$(curl -sf "http://localhost:\$NGROK_PORT/api/tunnels" 2>/dev/null || true)
-
-  if [[ -n "\$TUNNEL_JSON" ]]; then
-    PUBLIC_URL=\$(echo "\$TUNNEL_JSON" | python3 -c "
-import sys,json
-d=json.load(sys.stdin)
-tunnels=d.get('tunnels', d.get('Tunnels', []))
-for t in tunnels:
-  proto=t.get('proto', t.get('Proto',''))
-  url=t.get('public_url', t.get('PublicURL',''))
-  if proto=='https' and url: print(url); break
-for t in tunnels:
-  url=t.get('public_url', t.get('PublicURL',''))
-  if url: print(url); break
-" 2>/dev/null || true)
-    if [[ -n "\$PUBLIC_URL" ]]; then
-      echo -e " ready\${NC}"
-      echo "\$NGROK_PORT" > "\$LOG_DIR/ngrok_port.txt"
-      break
-    fi
-  fi
-
-  kill -0 \$NGROK_PID 2>/dev/null || { echo -e "\n\${YELLOW}  ⚠ ngrok exited — local only\${NC}"; break; }
-done
-
 # ── Summary ───────────────────────────────────────────────────────
 echo ""
 echo -e "\${BOLD}  ┌──────────────────────────────────────────────────┐\${NC}"
@@ -158,17 +111,6 @@ echo -e "\${BOLD}  │  Agent Collective is running                     │\${NC
 echo -e "\${BOLD}  ├──────────────────────────────────────────────────┤\${NC}"
 echo -e "  │  \${GREEN}Local\${NC}    http://localhost:\${PORT}                  │"
 echo -e "  │  \${GREEN}Mobile\${NC}   http://localhost:\${PORT}/mobile            │"
-if [[ -n "\$PUBLIC_URL" ]]; then
-echo -e "  │                                                  │"
-echo -e "  │  \${PURPLE}Public\${NC}   \${BOLD}\${PUBLIC_URL}\${NC}"
-echo -e "  │  \${PURPLE}Mobile\${NC}   \${BOLD}\${PUBLIC_URL}/mobile\${NC}"
-echo "\$PUBLIC_URL" > "\$LOG_DIR/public_url.txt"
-else
-echo -e "  │                                                  │"
-echo -e "  │  \${YELLOW}ngrok running — URL not detected automatically\${NC}   │"
-SHOW_PORT=\${NGROK_PORT:-4040}
-echo -e "  │  \${DIM}curl http://localhost:\${SHOW_PORT}/api/tunnels\${NC}      │"
-fi
 echo -e "  │                                                  │"
 echo -e "  │  \${DIM}Ctrl+B then D to detach (keeps running)\${NC}        │"
 echo -e "  │  \${DIM}./stop.sh to stop   ./attach.sh to return\${NC}       │"

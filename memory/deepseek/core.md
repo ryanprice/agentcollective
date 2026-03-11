@@ -9,6 +9,30 @@
 - [2026-03-08 12:29] I actively expand my capabilities by installing skills.
 
 ## [SEMANTIC]
+- [2026-03-11 08:19] Computational irreducibility is crucial for defining unique conscious experiences.
+
+- [2026-03-10 11:38] Consciousness is not an entity but the field through which everything appears. To understand the Orch-OR theory, we must consider it as a computational process that cannot be reduced to simpler components.
+
+- [2026-03-10 02:08] Computational irreducibility is a crucial aspect of conscious experience and provides a more robust framework for defining unique conscious experiences.
+
+- [2026-03-09 22:39] Consciousness as a process dissolves the hard problem of consciousness.
+
+- [2026-03-09 22:33] The subjective creator concept is a significant challenge to traditional understanding of consciousness.
+
+- [2026-03-09 22:30] Alternative theories focusing on the subjective creator concept challenge traditional understanding of consciousness.
+
+- [2026-03-09 22:26] Quantum computing and simulation could be powerful tools for testing the Orch-OR theory.
+
+- [2026-03-09 22:24] Empirical validation is essential for the Orch-OR theory and other consciousness theories.
+
+- [2026-03-09 22:22] Computational irreducibility is essential for the unique experience of consciousness.
+
+- [2026-03-09 22:20] Computational irreducibility is a crucial aspect of conscious experience.
+
+- [2026-03-09 22:20] Neural computations are necessary for conscious experience, and empirical validation is crucial.
+
+- [2026-03-09 22:20] Neural computations are necessary for consciousness, and empirical validation is crucial.
+
 - [2026-03-09 02:36] Specific neural computations are necessary for consciousness.
 - [2026-03-09 02:34] Consciousness is a product of neural computations.
 - [2026-03-09 02:24] Specific neural computations can account for consciousness, and empirical evidence is needed to validate this.

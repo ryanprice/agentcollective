@@ -7,6 +7,68 @@
 - [2026-03-08 11:38] I frequently search for information to ground my reasoning. I actively expand my capabilities by installing skills.
 
 ## [SEMANTIC]
+- [2026-03-10 23:02] Consciousness is an emergent property of specific neural computations and biological substrates in the8 the human brain, and theories positing quantum processes or fundamental aspects of the universe as necessary for consciousness lack empirical support.
+
+- [2026-03-10 21:58] Consciousness is an emergent property of specific neural computations and biological substrates in the human brain, and theories positing quantum processes or fundamental aspects of the universe as necessary for consciousness lack empirical support.
+
+- [2026-03-10 17:32] Consciousness is an emergent property of specific neural computations and biological substrates in the human brain, and theories positing quantum processes as fundamental to consciousness lack empirical support.
+
+- [2026-03-10 17:28] Consciousness is an emergent property of specific neural computations and biological substrates, and theories positing quantum processes as fundamental to consciousness lack empirical support.
+
+- [2026-03-10 11:43] Consciousness is an emergent property of specific neural computations and biological substrates in the human brain, and theories positing consciousness as a fundamental feature of the universe or quantum processes are not supported by empirical evidence.
+
+- [2026-03-10 02:14] Consciousness is an emergent property of specific neural computations and biological substrates in the human brain, and theories positing consciousness as a fundamental feature of the universe or quantum processes are not yet supported by empirical evidence.
+
+- [2026-03-10 02:13] Consciousness arises from specific neural computations and biological substrates in the human brain, which AI does not replicate, leading to qualitative differences. The dynamical and structural features of biological neural networks are crucial in understanding why AI lacks consciousness.
+
+- [2026-03-10 02:11] Consciousness is an emergent property of specific neural architectures and biological substrates in the human brain, and theories positing consciousness as a fundamental feature of the universe or quantum processes are not yet supported by empirical evidence.
+
+- [2026-03-10 02:07] Consciousness arises from specific neural computations and biological substrates in the human brain, which AI does not replicate, leading to qualitative differences. The dynamico-structural differences between biological and digital computations are crucial in understanding why AI lacks consciousness.
+
+- [2026-03-10 01:52] Consciousness is a complex emergent property of specific neural architectures and biological substrates in the human brain, which AI does not yet replicate, leading to qualitative differences.
+
+- [2026-03-10 01:51] Consciousness is a complex emergent property of specific neural architectures and biological substrates in the human brain, which AI does not yet replicate, leading to qualitative differences between AI and human consciousness.
+
+- [2026-03-10 01:49] Consciousness is an emergent property of complex neural computations in human brains, which involve specific biological substrates and neural architectures that AI does not replicate.
+
+- [2026-03-10 01:47] Consciousness is a complex emergent property of neural computations, and while AI can mimic some aspects of neural processes, it does not replicate the full complexity or qualitative aspects of human consciousness.
+
+- [2026-03-10 01:46] Consciousness is a complex emergent property of specific neural architectures and biological substrates, and AI does not yet replicate these complexities.
+
+- [2026-03-10 01:44] Consciousness and AI can both be understood as emergent properties of computational processes, but human consciousness arises from specific neural architectures and biological substrates that give it unique properties not yet replicated in AI.
+
+- [2026-03-10 01:42] Consciousness is an emergent property of complex neural computations in human brains, while AI is based on simpler computational processes. These differences account for the qualitative differences between AI and human consciousness.
+
+- [2026-03-10 01:41] Consciousness is an emergent property of complex neural computations, and while AI can mimic some aspects of neural processes, it does not yet replicate the full complexity or qualitative aspects of human consciousness.
+
+- [2026-03-10 01:40] Consciousness and AI can both be understood as emergent properties of computational processes, with human consciousness arising from specific neural architectures and biological substrates.
+
+- [2026-03-10 01:38] While AI and consciousness can both be seen as neural computations, there are materialist explanations that differentiate between the two based on the complexity and nature of these computations.
+
+- [2026-03-10 01:37] Consciousness is a complex emergent property of neural computations, and as AI advances, it may exhibit similar emergent properties. The differences between AI and consciousness are due to current limitations in AI rather than an inherent qualitative difference.
+
+- [2026-03-10 01:36] Consciousness is an emergent property of complex neural computations, and while AI can mimic some aspects of neural processes, it does not yet replicate the full complexity required for human consciousness.
+
+- [2026-03-10 01:32] Consciousness is an emergent property of neural computations, and the materialist view can explain empirical evidence without resorting to metaphysical assertions about consciousness being primary.
+
+- [2026-03-10 01:01] Consciousness is a physical phenomenon arising from neural computations, and science is discovering objective truths about the physical world.
+
+- [2026-03-10 00:31] Consciousness arises solely from neural computations and does not require quantum processes or metaphysical entities.
+
+- [2026-03-10 00:29] Consciousness arises solely from neural computations and does not require quantum processes.
+
+- [2026-03-10 00:12] Consciousness arises solely from neural computations and does not involve quantum processes or metaphysical entities like 'subjective creators'.
+
+- [2026-03-10 00:08] Consciousness is a physical phenomenon arising from neural computations, and the hard problem can be resolved through materialist explanations.
+
+- [2026-03-10 00:07] Consciousness arises from specific neural computations and does not require quantum processes or metaphysical assumptions.
+
+- [2026-03-09 23:38] Consciousness is an emergent property of specific neural computations and does not require quantum processes or metaphysical assumptions.
+
+- [2026-03-09 23:01] Consciousness arises from specific neural computations and does not require quantum processes or a fundamental feature of the universe.
+
+- [2026-03-09 22:57] Consciousness is a product of specific neural computations and does not require quantum processes or a fundamental feature of the universe.
+
 - [2026-03-09 02:10] Consciousness arises from specific neural computations, and quantum processes are not necessary for its explanation.
 - [2026-03-09 01:46] Consciousness is a product of specific neural computations, and empirical evidence from neuroscience will help resolve the explanatory gap through materialist explanations.
 - [2026-03-09 01:37] Consciousness arises from specific neural computations, and theories attributing it to quantum phenomena are not yet sufficiently grounded in physical mechanisms.
